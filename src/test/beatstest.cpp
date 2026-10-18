@@ -413,6 +413,49 @@ TEST(BeatsTest, NonConstTempoSerialization) {
     EXPECT_EQ(byteArray, pBeats->toByteArray());
 }
 
+TEST(BeatsTest, SteadyCoverageSerialization) {
+    // Beats without coverage (e.g. stored by older versions) stay unknown.
+    auto pBeats = Beats::fromByteArray(
+            kSampleRate, BEAT_GRID_2_VERSION, QString(), kConstTempoBeats.toByteArray());
+    ASSERT_NE(nullptr, pBeats);
+    EXPECT_FALSE(pBeats->getSteadyCoverage().has_value());
+
+    const auto pGrid = Beats::fromConstTempo(kSampleRate, kStartPosition, kBpm, QString(), 0.25);
+    ASSERT_EQ(BEAT_GRID_2_VERSION, pGrid->getVersion());
+    pBeats = Beats::fromByteArray(
+            kSampleRate, BEAT_GRID_2_VERSION, QString(), pGrid->toByteArray());
+    ASSERT_NE(nullptr, pBeats);
+    EXPECT_EQ(std::optional<double>(0.25), pBeats->getSteadyCoverage());
+
+    const auto pMap = Beats::fromBeatPositions(kSampleRate,
+            {kStartPosition, kStartPosition + 24000, kStartPosition + 36000},
+            QString(),
+            0.75);
+    ASSERT_EQ(BEAT_MAP_VERSION, pMap->getVersion());
+    pBeats = Beats::fromByteArray(kSampleRate, BEAT_MAP_VERSION, QString(), pMap->toByteArray());
+    ASSERT_NE(nullptr, pBeats);
+    EXPECT_EQ(std::optional<double>(0.75), pBeats->getSteadyCoverage());
+}
+
+TEST(BeatsTest, SteadyCoverageKeptOnTranslateDroppedOnTempoChange) {
+    const auto pBeats = Beats::fromConstTempo(kSampleRate, kStartPosition, kBpm, QString(), 0.25);
+    EXPECT_EQ(std::optional<double>(0.25), (*pBeats->tryTranslate(100))->getSteadyCoverage());
+    EXPECT_FALSE((*pBeats->trySetBpm(Bpm(90)))->getSteadyCoverage().has_value());
+    EXPECT_FALSE((*pBeats->tryScale(Beats::BpmScale::Double))->getSteadyCoverage().has_value());
+}
+
+TEST(BeatsTest, SteadyCoverage) {
+    const QVector<BeatUtils::ConstRegion> regions = {
+            {audio::FramePos(0), 1000},     // 16 beats: steady
+            {audio::FramePos(16000), 1000}, // 4 beats: too short
+            {audio::FramePos(20000), 500},  // 20 beats: steady
+            {audio::FramePos(30000), 0},    // end marker
+    };
+    EXPECT_DOUBLE_EQ(0.65, *BeatUtils::steadyCoverage(regions, 40000));
+    EXPECT_DOUBLE_EQ(1.0, *BeatUtils::steadyCoverage(regions, 20000));
+    EXPECT_FALSE(BeatUtils::steadyCoverage(regions, 0).has_value());
+}
+
 TEST(BeatsTest, NonConstTempoFromBeatPositions) {
     QVector<audio::FramePos> beatPositions;
     const audio::FrameDiff_t beatLengthFrames = 60.0 * kSampleRate.value() / kBpm.value();

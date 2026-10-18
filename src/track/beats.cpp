@@ -163,19 +163,22 @@ mixxx::BeatsPointer Beats::fromConstTempo(
         mixxx::audio::SampleRate sampleRate,
         mixxx::audio::FramePos lastMarkerPosition,
         mixxx::Bpm lastMarkerBpm,
-        const QString& subVersion) {
+        const QString& subVersion,
+        std::optional<double> steadyCoverage) {
     VERIFY_OR_DEBUG_ASSERT(sampleRate.isValid() &&
             lastMarkerPosition.isValid() && lastMarkerBpm.isValid()) {
         return nullptr;
     }
-    return BeatsPointer(new Beats({}, lastMarkerPosition, lastMarkerBpm, sampleRate, subVersion));
+    return BeatsPointer(new Beats(
+            {}, lastMarkerPosition, lastMarkerBpm, sampleRate, subVersion, steadyCoverage));
 }
 
 // static
 mixxx::BeatsPointer Beats::fromBeatPositions(
         mixxx::audio::SampleRate sampleRate,
         const QVector<audio::FramePos>& beatPositions,
-        const QString& subVersion) {
+        const QString& subVersion,
+        std::optional<double> steadyCoverage) {
     VERIFY_OR_DEBUG_ASSERT(sampleRate.isValid() && beatPositions.size() >= 2) {
         return nullptr;
     }
@@ -232,7 +235,8 @@ mixxx::BeatsPointer Beats::fromBeatPositions(
             markerPosition.toLowerFrameBoundary(),
             bpm,
             sampleRate,
-            subVersion));
+            subVersion,
+            steadyCoverage));
 }
 
 // static
@@ -291,9 +295,13 @@ mixxx::BeatsPointer Beats::fromBeatGridByteArray(
     track::io::BeatGrid grid;
     audio::FramePos position;
     Bpm bpm;
+    std::optional<double> steadyCoverage;
     if (grid.ParseFromArray(byteArray.constData(), byteArray.size())) {
         position = audio::FramePos(grid.first_beat().frame_position());
         bpm = Bpm(grid.bpm().bpm());
+        if (grid.has_steady_coverage()) {
+            steadyCoverage = grid.steady_coverage();
+        }
     } else if (byteArray.size() == sizeof(BeatGridV1Data)) {
         // Legacy fallback for BeatGrid-1.0
         const auto* pBlob = reinterpret_cast<const BeatGridV1Data*>(byteArray.constData());
@@ -302,7 +310,7 @@ mixxx::BeatsPointer Beats::fromBeatGridByteArray(
     }
 
     if (position.isValid() && bpm.isValid()) {
-        return fromConstTempo(sampleRate, position, bpm, subVersion);
+        return fromConstTempo(sampleRate, position, bpm, subVersion, steadyCoverage);
     }
 
     // Failed to parse the beatgrid.
@@ -335,7 +343,11 @@ BeatsPointer Beats::fromBeatMapByteArray(
         return nullptr;
     }
 
-    return fromBeatPositions(sampleRate, beatPositions, subVersion);
+    std::optional<double> steadyCoverage;
+    if (map.has_steady_coverage()) {
+        steadyCoverage = map.steady_coverage();
+    }
+    return fromBeatPositions(sampleRate, beatPositions, subVersion, steadyCoverage);
 }
 
 QByteArray Beats::toByteArray() const {
@@ -354,6 +366,9 @@ QByteArray Beats::toBeatGridByteArray() const {
             static_cast<google::protobuf::int32>(
                     m_lastMarkerPosition.toLowerFrameBoundary().value()));
     grid.mutable_bpm()->set_bpm(m_lastMarkerBpm.value());
+    if (m_steadyCoverage) {
+        grid.set_steady_coverage(*m_steadyCoverage);
+    }
 
     std::string output;
     grid.SerializeToString(&output);
@@ -367,6 +382,9 @@ QByteArray Beats::toBeatMapByteArray() const {
         track::io::Beat beat;
         beat.set_frame_position(static_cast<google::protobuf::int32>(position.value()));
         map.add_beat()->CopyFrom(beat);
+    }
+    if (m_steadyCoverage) {
+        map.set_steady_coverage(*m_steadyCoverage);
     }
 
     std::string output;
@@ -636,7 +654,8 @@ std::optional<BeatsPointer> Beats::tryTranslate(audio::FrameDiff_t offsetFrames)
             lastMarkerPosition.toLowerFrameBoundary(),
             m_lastMarkerBpm,
             m_sampleRate,
-            m_subVersion));
+            m_subVersion,
+            m_steadyCoverage));
 }
 
 std::optional<BeatsPointer> Beats::tryTranslateBeats(double xBeats) const {
@@ -650,7 +669,8 @@ std::optional<BeatsPointer> Beats::tryTranslateBeats(double xBeats) const {
             lastMarkerPosition.toLowerFrameBoundary(),
             m_lastMarkerBpm,
             m_sampleRate,
-            m_subVersion));
+            m_subVersion,
+            m_steadyCoverage));
 }
 
 std::optional<BeatsPointer> Beats::tryScale(BpmScale scale) const {

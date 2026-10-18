@@ -20,6 +20,12 @@ class BeatUtils {
             const QVector<mixxx::audio::FramePos>& coarseBeats,
             mixxx::audio::SampleRate sampleRate);
 
+    /// Fraction [0, 1] of analyzedFrames covered by constant regions of at
+    /// least kMinRegionBeatCount beats. std::nullopt if analyzedFrames <= 0.
+    static std::optional<double> steadyCoverage(
+            const QVector<ConstRegion>& constantRegions,
+            mixxx::audio::FrameDiff_t analyzedFrames);
+
     static mixxx::Bpm calculateAverageBpm(int numberOfBeats,
             mixxx::audio::SampleRate sampleRate,
             mixxx::audio::FramePos lowerFrame,

@@ -157,12 +157,14 @@ class Beats : private std::enable_shared_from_this<Beats> {
             mixxx::audio::FramePos lastMarkerPosition,
             mixxx::Bpm lastMarkerBpm,
             mixxx::audio::SampleRate sampleRate,
-            const QString& subVersion)
+            const QString& subVersion,
+            std::optional<double> steadyCoverage = std::nullopt)
             : m_markers(std::move(markers)),
               m_lastMarkerPosition(lastMarkerPosition),
               m_lastMarkerBpm(lastMarkerBpm),
               m_sampleRate(sampleRate),
-              m_subVersion(subVersion) {
+              m_subVersion(subVersion),
+              m_steadyCoverage(steadyCoverage) {
         DEBUG_ASSERT(m_lastMarkerPosition.isValid());
         DEBUG_ASSERT(!m_lastMarkerPosition.isFractional());
         DEBUG_ASSERT(m_lastMarkerBpm.isValid());
@@ -249,12 +251,14 @@ class Beats : private std::enable_shared_from_this<Beats> {
             audio::SampleRate sampleRate,
             audio::FramePos position,
             Bpm bpm,
-            const QString& subVersion = QString());
+            const QString& subVersion = QString(),
+            std::optional<double> steadyCoverage = std::nullopt);
 
     static mixxx::BeatsPointer fromBeatPositions(
             audio::SampleRate sampleRate,
             const QVector<audio::FramePos>& beatPositions,
-            const QString& subVersion = QString());
+            const QString& subVersion = QString(),
+            std::optional<double> steadyCoverage = std::nullopt);
 
     static mixxx::BeatsPointer fromBeatMarkers(
             audio::SampleRate sampleRate,
@@ -294,6 +298,15 @@ class Beats : private std::enable_shared_from_this<Beats> {
     /// the beats object.
     QString getSubVersion() const {
         return m_subVersion;
+    }
+
+    /// Fraction [0, 1] of the analyzed audio that is covered by constant-tempo
+    /// regions of at least 16 beats, i.e. how much of the track has a steady
+    /// pulse. Low values mean the BPM is a guess. std::nullopt if unknown,
+    /// e.g. for beats imported from file metadata or after the user changed
+    /// the tempo.
+    std::optional<double> getSteadyCoverage() const {
+        return m_steadyCoverage;
     }
 
     ////////////////////////////////////////////////////////////////////////////
@@ -445,6 +458,8 @@ class Beats : private std::enable_shared_from_this<Beats> {
 
     // The sub-version of this beatgrid.
     const QString m_subVersion;
+
+    const std::optional<double> m_steadyCoverage = std::nullopt;
 };
 
 } // namespace mixxx

@@ -137,6 +137,31 @@ QVector<BeatUtils::ConstRegion> BeatUtils::retrieveConstRegions(
 }
 
 // static
+std::optional<double> BeatUtils::steadyCoverage(
+        const QVector<BeatUtils::ConstRegion>& constantRegions,
+        mixxx::audio::FrameDiff_t analyzedFrames) {
+    if (analyzedFrames <= 0) {
+        return std::nullopt;
+    }
+    // Regions shorter than kMinRegionBeatCount are where the detected beats
+    // are floating around, e.g. ambient passages, rubato or beatless intros.
+    // Their share of the track tells how much of it has a steady pulse.
+    mixxx::audio::FrameDiff_t steadyFrames = 0;
+    for (int i = 0; i < constantRegions.size() - 1; ++i) {
+        if (constantRegions[i].beatLength <= 0) {
+            continue;
+        }
+        const mixxx::audio::FrameDiff_t length =
+                constantRegions[i + 1].firstBeat - constantRegions[i].firstBeat;
+        const int numberOfBeats = static_cast<int>((length / constantRegions[i].beatLength) + 0.5);
+        if (numberOfBeats >= kMinRegionBeatCount) {
+            steadyFrames += length;
+        }
+    }
+    return math_min(steadyFrames / analyzedFrames, 1.0);
+}
+
+// static
 mixxx::Bpm BeatUtils::makeConstBpm(
         const QVector<BeatUtils::ConstRegion>& constantRegions,
         mixxx::audio::SampleRate sampleRate,

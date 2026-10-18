@@ -12,6 +12,7 @@
 #include "library/rekordbox/rekordboxconstants.h"
 #include "track/beatfactory.h"
 #include "track/track.h"
+#include "util/math.h"
 
 // static
 QList<mixxx::AnalyzerPluginInfo> AnalyzerBeats::availablePlugins() {
@@ -266,7 +267,9 @@ void AnalyzerBeats::storeResults(TrackPointer pTrack) {
                 beats,
                 extraVersionInfo,
                 m_bPreferencesFixedTempo,
-                m_sampleRate);
+                m_sampleRate,
+                static_cast<mixxx::audio::FrameDiff_t>(
+                        math_min(m_currentFrame, m_maxFramesToProcess)));
         qDebug() << "AnalyzerBeats plugin detected" << beats.size()
                  << "beats. Predominant BPM:"
                  << (pBeats ? pBeats->getBpmInRange(
@@ -274,7 +277,9 @@ void AnalyzerBeats::storeResults(TrackPointer pTrack) {
                                       mixxx::audio::FramePos{
                                               pTrack->getDuration() *
                                               pBeats->getSampleRate()})
-                            : mixxx::Bpm());
+                            : mixxx::Bpm())
+                 << "Steady coverage:"
+                 << (pBeats ? pBeats->getSteadyCoverage().value_or(-1) : -1);
     } else {
         mixxx::Bpm bpm = m_pPlugin->getBpm();
         qDebug() << "AnalyzerBeats plugin detected constant BPM: " << bpm;
