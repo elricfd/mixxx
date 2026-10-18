@@ -7,6 +7,9 @@
 
 #include "analyzer/analyzertrack.h"
 #include "analyzer/constants.h"
+#ifdef __BEATTHIS__
+#include "analyzer/plugins/analyzerbeatthis.h"
+#endif
 #include "analyzer/plugins/analyzerqueenmarybeats.h"
 #include "analyzer/plugins/analyzersoundtouchbeats.h"
 #include "library/rekordbox/rekordboxconstants.h"
@@ -18,6 +21,9 @@
 QList<mixxx::AnalyzerPluginInfo> AnalyzerBeats::availablePlugins() {
     QList<mixxx::AnalyzerPluginInfo> plugins;
     // First one below is the default
+#ifdef __BEATTHIS__
+    plugins.append(mixxx::AnalyzerBeatThis::pluginInfo());
+#endif
     plugins.append(mixxx::AnalyzerQueenMaryBeats::pluginInfo());
     plugins.append(mixxx::AnalyzerSoundTouchBeats::pluginInfo());
     return plugins;
@@ -30,8 +36,28 @@ mixxx::AnalyzerPluginInfo AnalyzerBeats::defaultPlugin() {
     return plugins.at(0);
 }
 
+std::unique_ptr<mixxx::AnalyzerBeatsPlugin> AnalyzerBeats::makePlugin(
+        const QString& pluginId) const {
+#ifdef __BEATTHIS__
+    if (pluginId == mixxx::AnalyzerBeatThis::pluginInfo().id()) {
+        return std::make_unique<mixxx::AnalyzerBeatThis>(
+                mixxx::AnalyzerBeatThis::modelPath(m_resourcePath));
+    }
+#endif
+    if (pluginId == mixxx::AnalyzerQueenMaryBeats::pluginInfo().id()) {
+        return std::make_unique<mixxx::AnalyzerQueenMaryBeats>();
+    }
+    if (pluginId == mixxx::AnalyzerSoundTouchBeats::pluginInfo().id()) {
+        return std::make_unique<mixxx::AnalyzerSoundTouchBeats>();
+    }
+    // We have already verified that the plugin id is valid
+    DEBUG_ASSERT(false);
+    return nullptr;
+}
+
 AnalyzerBeats::AnalyzerBeats(UserSettingsPointer pConfig, bool enforceBpmDetection)
         : m_bpmSettings(pConfig),
+          m_resourcePath(pConfig->getResourcePath()),
           m_enforceBpmDetection(enforceBpmDetection),
           m_bPreferencesReanalyzeOldBpm(false),
           m_bPreferencesReanalyzeImported(false),
@@ -104,26 +130,21 @@ bool AnalyzerBeats::initialize(const AnalyzerTrack& track,
 
     DEBUG_ASSERT(!m_pPlugin);
     if (bShouldAnalyze) {
-        if (m_pluginId == mixxx::AnalyzerQueenMaryBeats::pluginInfo().id()) {
-            m_pPlugin = std::make_unique<mixxx::AnalyzerQueenMaryBeats>();
-        } else if (m_pluginId == mixxx::AnalyzerSoundTouchBeats::pluginInfo().id()) {
-            m_pPlugin = std::make_unique<mixxx::AnalyzerSoundTouchBeats>();
-        } else {
-            // This must not happen, because we have already verified above
-            // that the PlugInId is valid
-            DEBUG_ASSERT(false);
+        m_pPlugin = makePlugin(m_pluginId);
+        bShouldAnalyze = m_pPlugin && m_pPlugin->initialize(m_sampleRate);
+        if (!bShouldAnalyze && m_pluginId != mixxx::AnalyzerQueenMaryBeats::pluginInfo().id()) {
+            // e.g. the Beat This! model file is missing
+            qWarning() << "Beat plugin" << m_pluginId << "is unavailable, falling back to"
+                       << mixxx::AnalyzerQueenMaryBeats::pluginInfo().id();
+            m_pluginId = mixxx::AnalyzerQueenMaryBeats::pluginInfo().id();
+            m_pPlugin = makePlugin(m_pluginId);
+            bShouldAnalyze = m_pPlugin && m_pPlugin->initialize(m_sampleRate);
         }
-
-        if (m_pPlugin) {
-            if (m_pPlugin->initialize(m_sampleRate)) {
-                qDebug() << "Beat calculation started with plugin" << m_pluginId;
-            } else {
-                qDebug() << "Beat calculation will not start.";
-                m_pPlugin.reset();
-                bShouldAnalyze = false;
-            }
+        if (bShouldAnalyze) {
+            qDebug() << "Beat calculation started with plugin" << m_pluginId;
         } else {
-            bShouldAnalyze = false;
+            qDebug() << "Beat calculation will not start.";
+            m_pPlugin.reset();
         }
     }
     return bShouldAnalyze;
@@ -189,8 +210,8 @@ bool AnalyzerBeats::shouldAnalyze(TrackPointer pTrack) const {
     // Beat grid exists but version and settings differ
     if (!m_bPreferencesReanalyzeOldBpm) {
         qDebug() << "Beat calculation skips analyzing because the track has"
-                << "a BPM computed by a previous Mixxx version and user"
-                << "preferences indicate we should not change it.";
+                 << "a BPM computed by a previous Mixxx version and user"
+                 << "preferences indicate we should not change it.";
         return false;
     }
 

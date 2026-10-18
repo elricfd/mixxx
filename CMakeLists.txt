@@ -2932,6 +2932,8 @@ if(BUILD_TESTING)
     src/test/beatmaptest.cpp
     src/test/beatstest.cpp
     src/test/beatstranslatetest.cpp
+    src/test/beatutilstest.cpp
+    src/test/analyzerbeatthistest.cpp
     src/test/borrowabletest.cpp
     src/test/bpmtest.cpp
     src/test/bpmcontrol_test.cpp
@@ -3661,6 +3663,63 @@ if(KEYFINDER)
 
   target_sources(mixxx-lib PRIVATE src/analyzer/plugins/analyzerkeyfinder.cpp)
   target_compile_definitions(mixxx-lib PUBLIC __KEYFINDER__)
+endif()
+
+# Beat This! neural beat tracker, run with ONNX Runtime
+# The model is not part of the repository: export it with
+# mik-tempo-research/export_onnx.py into res/models/beatthis_final0.onnx.
+option(BEATTHIS "Beat This! neural beat tracker (needs ONNX Runtime)" ON)
+if(BEATTHIS)
+  find_package(onnxruntime CONFIG QUIET)
+  if(NOT TARGET onnxruntime::onnxruntime)
+    set(ONNXRUNTIME_ROOT "" CACHE PATH "Unpacked ONNX Runtime release")
+    find_path(
+      ONNXRUNTIME_INCLUDE_DIR
+      onnxruntime_cxx_api.h
+      HINTS "${ONNXRUNTIME_ROOT}/include"
+      PATH_SUFFIXES onnxruntime onnxruntime/core/session
+    )
+    find_library(
+      ONNXRUNTIME_LIBRARY
+      onnxruntime
+      HINTS "${ONNXRUNTIME_ROOT}/lib"
+    )
+    if(ONNXRUNTIME_INCLUDE_DIR AND ONNXRUNTIME_LIBRARY)
+      add_library(onnxruntime::onnxruntime UNKNOWN IMPORTED)
+      set_target_properties(
+        onnxruntime::onnxruntime
+        PROPERTIES
+          IMPORTED_LOCATION "${ONNXRUNTIME_LIBRARY}"
+          INTERFACE_INCLUDE_DIRECTORIES "${ONNXRUNTIME_INCLUDE_DIR}"
+      )
+    endif()
+  endif()
+  find_package(SampleRate CONFIG QUIET)
+  if(TARGET onnxruntime::onnxruntime AND TARGET SampleRate::samplerate)
+    target_sources(mixxx-lib PRIVATE src/analyzer/plugins/analyzerbeatthis.cpp)
+    target_link_libraries(
+      mixxx-lib
+      PRIVATE onnxruntime::onnxruntime SampleRate::samplerate
+    )
+    target_compile_definitions(mixxx-lib PUBLIC __BEATTHIS__)
+    if(WIN32 AND ONNXRUNTIME_ROOT)
+      # The prebuilt ONNX Runtime is not managed by vcpkg's applocal copy.
+      file(GLOB ONNXRUNTIME_DLLS "${ONNXRUNTIME_ROOT}/lib/*.dll")
+      file(COPY ${ONNXRUNTIME_DLLS} DESTINATION "${CMAKE_CURRENT_BINARY_DIR}")
+      install(FILES ${ONNXRUNTIME_DLLS} DESTINATION "${MIXXX_INSTALL_BINDIR}")
+    endif()
+    if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/res/models/beatthis_final0.onnx")
+      install(
+        FILES "${CMAKE_CURRENT_SOURCE_DIR}/res/models/beatthis_final0.onnx"
+        DESTINATION "${MIXXX_INSTALL_DATADIR}/models"
+      )
+    endif()
+  else()
+    message(
+      WARNING
+      "Beat This! disabled: ONNX Runtime (set ONNXRUNTIME_ROOT) or libsamplerate not found"
+    )
+  endif()
 endif()
 
 # FLAC
