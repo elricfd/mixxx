@@ -31,6 +31,8 @@ namespace {
 const TagLib::String kAtomKeyBpm = "----:com.apple.iTunes:BPM";
 const TagLib::String kAtomKeyInitialKey = "----:com.apple.iTunes:initialkey"; // official/preferred
 const TagLib::String kAtomKeyAlternativeKey = "----:com.apple.iTunes:KEY";    // alternative (conforms to Rapid Evolution)
+const TagLib::String kAtomKeyEnergyLevel = "----:com.apple.iTunes:EnergyLevel";
+const TagLib::String kAtomKeyTempoMap = "----:com.apple.iTunes:TempoMap";
 const TagLib::String kAtomKeyReplayGainTrackGain = "----:com.apple.iTunes:replaygain_track_gain";
 const TagLib::String kAtomKeyReplayGainTrackPeak = "----:com.apple.iTunes:replaygain_track_peak";
 const TagLib::String kAtomKeyReplayGainAlbumGain = "----:com.apple.iTunes:replaygain_album_gain";
@@ -224,6 +226,15 @@ void importTrackMetadataFromTag(
                     &keyText) || // alternative (conforms to Rapid Evolution)
             resetMissingTagMetadata) {
         pTrackMetadata->refTrackInfo().setKeyText(keyText);
+    }
+
+    QString energy;
+    if (readAtom(tag, kAtomKeyEnergyLevel, &energy) || resetMissingTagMetadata) {
+        pTrackMetadata->refTrackInfo().setEnergy(energy);
+    }
+    QString tempoMap;
+    if (readAtom(tag, kAtomKeyTempoMap, &tempoMap) || resetMissingTagMetadata) {
+        pTrackMetadata->refTrackInfo().setTempoMap(tempoMap);
     }
 
     QString trackGain;
@@ -438,6 +449,9 @@ bool exportTrackMetadataIntoTag(
             toTString(trackMetadata.getTrackInfo().getKeyText());
     writeAtom(pTag, kAtomKeyInitialKey, keyText);      // preferred
     updateAtom(pTag, kAtomKeyAlternativeKey, keyText); // alternative
+
+    writeAtom(pTag, kAtomKeyEnergyLevel, toTString(trackMetadata.getTrackInfo().getEnergy()));
+    writeAtom(pTag, kAtomKeyTempoMap, toTString(trackMetadata.getTrackInfo().getTempoMap()));
 
     writeAtom(pTag, kAtomKeyReplayGainTrackGain, toTString(formatTrackGain(trackMetadata)));
     writeAtom(pTag, kAtomKeyReplayGainTrackPeak, toTString(formatTrackPeak(trackMetadata)));

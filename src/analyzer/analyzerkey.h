@@ -12,7 +12,7 @@
 
 class AnalyzerKey : public Analyzer {
   public:
-    explicit AnalyzerKey(const KeyDetectionSettings& keySettings);
+    explicit AnalyzerKey(UserSettingsPointer pConfig);
     ~AnalyzerKey() override = default;
 
     static QList<mixxx::AnalyzerPluginInfo> availablePlugins();
@@ -31,8 +31,10 @@ class AnalyzerKey : public Analyzer {
             const QString& pluginId, bool bPreferencesFastAnalysis);
 
     bool shouldAnalyze(TrackPointer tio) const;
+    std::unique_ptr<mixxx::AnalyzerKeyPlugin> makePlugin(const QString& pluginId) const;
 
     KeyDetectionSettings m_keySettings;
+    const QString m_resourcePath;
     std::unique_ptr<mixxx::AnalyzerKeyPlugin> m_pPlugin;
     QString m_pluginId;
     mixxx::audio::SampleRate m_sampleRate;

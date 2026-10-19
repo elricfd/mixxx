@@ -7,8 +7,7 @@
 #include <vector>
 
 #include "analyzer/plugins/analyzerplugin.h"
-
-struct SRC_STATE_tag;
+#include "analyzer/plugins/onnxutil.h"
 
 namespace mixxx {
 
@@ -34,7 +33,7 @@ class AnalyzerBeatThis : public AnalyzerBeatsPlugin {
     static QString modelPath(const QString& resourcePath);
 
     explicit AnalyzerBeatThis(const QString& modelPath);
-    ~AnalyzerBeatThis() override;
+    ~AnalyzerBeatThis() override = default;
 
     AnalyzerPluginInfo info() const override {
         return pluginInfo();
@@ -70,13 +69,9 @@ class AnalyzerBeatThis : public AnalyzerBeatsPlugin {
     static std::vector<double> pickBeats(const std::vector<float>& logits);
 
   private:
-    bool resample(const float* pMono, long frames, bool endOfInput);
-
     const QString m_modelPath;
     mixxx::audio::SampleRate m_sampleRate;
-    SRC_STATE_tag* m_pResampler;
-    std::vector<float> m_mono;
-    std::vector<float> m_audio; // mono, kModelSampleRate
+    MonoResampler m_resampler;
     QVector<mixxx::audio::FramePos> m_resultBeats;
 };
 

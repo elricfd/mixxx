@@ -448,6 +448,8 @@ void TrackDAO::addTracksPrepare() {
             "tracktotal,"
             "composer,"
             "grouping,"
+            "energy,"
+            "tempo_map,"
             "filetype,"
             "location,"
             "color,"
@@ -497,6 +499,8 @@ void TrackDAO::addTracksPrepare() {
             ":tracktotal,"
             ":composer,"
             ":grouping,"
+            ":energy,"
+            ":tempo_map,"
             ":filetype,"
             ":location,"
             ":color,"
@@ -601,6 +605,8 @@ void bindTrackLibraryValues(
     pTrackLibraryQuery->bindValue(":genre", trackInfo.getGenre());
     pTrackLibraryQuery->bindValue(":composer", trackInfo.getComposer());
     pTrackLibraryQuery->bindValue(":grouping", trackInfo.getGrouping());
+    pTrackLibraryQuery->bindValue(":energy", trackInfo.getEnergy());
+    pTrackLibraryQuery->bindValue(":tempo_map", trackInfo.getTempoMap());
     pTrackLibraryQuery->bindValue(":tracknumber", trackInfo.getTrackNumber());
     pTrackLibraryQuery->bindValue(":tracktotal", trackInfo.getTrackTotal());
     pTrackLibraryQuery->bindValue(":filetype", track.getFileType());
@@ -1186,6 +1192,14 @@ void setTrackComposer(const QSqlRecord& record, const int column, Track* pTrack)
     pTrack->setComposer(record.value(column).toString());
 }
 
+void setTrackEnergy(const QSqlRecord& record, const int column, Track* pTrack) {
+    pTrack->setEnergy(record.value(column).toString());
+}
+
+void setTrackTempoMap(const QSqlRecord& record, const int column, Track* pTrack) {
+    pTrack->setTempoMap(record.value(column).toString());
+}
+
 void setTrackGrouping(const QSqlRecord& record, const int column, Track* pTrack) {
     pTrack->setGrouping(record.value(column).toString());
 }
@@ -1394,6 +1408,8 @@ TrackPointer TrackDAO::getTrackById(TrackId trackId) const {
             {"year", setTrackYear},
             {"genre", setTrackGenre},
             {"composer", setTrackComposer},
+            {"energy", setTrackEnergy},
+            {"tempo_map", setTrackTempoMap},
             {"grouping", setTrackGrouping},
             {"tracknumber", setTrackNumber},
             {"tracktotal", setTrackTotal},
@@ -1703,6 +1719,8 @@ bool TrackDAO::updateTrack(const Track& track) const {
             "genre=:genre,"
             "composer=:composer,"
             "grouping=:grouping,"
+            "energy=:energy,"
+            "tempo_map=:tempo_map,"
             "filetype=:filetype,"
             "tracknumber=:tracknumber,"
             "tracktotal=:tracktotal,"

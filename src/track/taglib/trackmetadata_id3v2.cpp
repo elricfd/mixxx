@@ -72,6 +72,8 @@ const QString kMusicBrainzOwner = QStringLiteral("http://musicbrainz.org");
 
 // Serato frames
 const QString kFrameDescriptionSeratoBeatGrid = QStringLiteral("Serato BeatGrid");
+const QString kFrameDescriptionEnergyLevel = QStringLiteral("EnergyLevel");
+const QString kFrameDescriptionTempoMap = QStringLiteral("TempoMap");
 const QString kFrameDescriptionSeratoMarkers = QStringLiteral("Serato Markers_");
 const QString kFrameDescriptionSeratoMarkers2 = QStringLiteral("Serato Markers2");
 
@@ -906,6 +908,16 @@ void importTrackMetadataFromTag(
                 firstNonEmptyFrameToQString(keyFrames));
     }
 
+    // Same frame names as Mixed In Key, so energy levels written by either app are shared.
+    const QString energy = readFirstUserTextIdentificationFrame(tag, kFrameDescriptionEnergyLevel);
+    if (!energy.isEmpty() || resetMissingTagMetadata) {
+        pTrackMetadata->refTrackInfo().setEnergy(energy);
+    }
+    const QString tempoMap = readFirstUserTextIdentificationFrame(tag, kFrameDescriptionTempoMap);
+    if (!tempoMap.isEmpty() || resetMissingTagMetadata) {
+        pTrackMetadata->refTrackInfo().setTempoMap(tempoMap);
+    }
+
     QString trackGain =
             readFirstUserTextIdentificationFrame(
                     tag,
@@ -1215,6 +1227,15 @@ bool exportTrackMetadataIntoTag(TagLib::ID3v2::Tag* pTag,
             pTag,
             "TKEY",
             trackMetadata.getTrackInfo().getKeyText());
+    writeUserTextIdentificationFrame(
+            pTag,
+            kFrameDescriptionEnergyLevel,
+            trackMetadata.getTrackInfo().getEnergy(),
+            true);
+    writeUserTextIdentificationFrame(
+            pTag,
+            kFrameDescriptionTempoMap,
+            trackMetadata.getTrackInfo().getTempoMap());
 
     writeUserTextIdentificationFrame(
             pTag,

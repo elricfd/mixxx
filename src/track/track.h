@@ -209,6 +209,10 @@ class Track : public QObject {
     }
     QString getComposer() const;
     void setComposer(const QString&);
+    QString getEnergy() const;
+    void setEnergy(const QString&);
+    QString getTempoMap() const;
+    void setTempoMap(const QString&);
     QString getGrouping() const;
     void setGrouping(const QString&);
 

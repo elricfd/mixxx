@@ -2647,6 +2647,12 @@ install(
   DESTINATION "${MIXXX_INSTALL_DATADIR}"
 )
 
+# Stem separation helper run by the track menu's "Separate Stems"
+install(
+  DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/res/stems"
+  DESTINATION "${MIXXX_INSTALL_DATADIR}"
+)
+
 # Licenses
 install(
   FILES
@@ -2936,6 +2942,9 @@ if(BUILD_TESTING)
     src/test/beatstranslatetest.cpp
     src/test/beatutilstest.cpp
     src/test/analyzerbeatthistest.cpp
+    src/test/analyzerkeyevaltest.cpp
+    src/test/analyzeropenkeyscantest.cpp
+    src/test/analyzerenergytest.cpp
     src/test/borrowabletest.cpp
     src/test/bpmtest.cpp
     src/test/bpmcontrol_test.cpp
@@ -3699,12 +3708,20 @@ if(BEATTHIS)
   endif()
   find_package(SampleRate CONFIG QUIET)
   if(TARGET onnxruntime::onnxruntime AND TARGET SampleRate::samplerate)
-    target_sources(mixxx-lib PRIVATE src/analyzer/plugins/analyzerbeatthis.cpp)
+    # OpenKeyScan neural key detector shares ONNX Runtime; model:
+    # mik-tempo-research/export_openkeyscan_onnx.py into res/models/openkeyscan3.onnx.
+    target_sources(
+      mixxx-lib
+      PRIVATE
+        src/analyzer/plugins/analyzerbeatthis.cpp
+        src/analyzer/plugins/analyzeropenkeyscan.cpp
+        src/analyzer/plugins/onnxutil.cpp
+    )
     target_link_libraries(
       mixxx-lib
       PRIVATE onnxruntime::onnxruntime SampleRate::samplerate
     )
-    target_compile_definitions(mixxx-lib PUBLIC __BEATTHIS__)
+    target_compile_definitions(mixxx-lib PUBLIC __BEATTHIS__ __OPENKEYSCAN__)
     if(WIN32 AND ONNXRUNTIME_ROOT)
       # The prebuilt ONNX Runtime is not managed by vcpkg's applocal copy.
       file(GLOB ONNXRUNTIME_DLLS "${ONNXRUNTIME_ROOT}/lib/*.dll")
@@ -3717,12 +3734,28 @@ if(BEATTHIS)
         DESTINATION "${MIXXX_INSTALL_DATADIR}/models"
       )
     endif()
+    if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/res/models/openkeyscan3.onnx")
+      install(
+        FILES "${CMAKE_CURRENT_SOURCE_DIR}/res/models/openkeyscan3.onnx"
+        DESTINATION "${MIXXX_INSTALL_DATADIR}/models"
+      )
+    endif()
   else()
     message(
       WARNING
       "Beat This! disabled: ONNX Runtime (set ONNXRUNTIME_ROOT) or libsamplerate not found"
     )
   endif()
+endif()
+
+# Energy level 1..10 (trees fitted to Mixed In Key, see mik-tempo-research/energy_export.py)
+find_package(SampleRate CONFIG QUIET)
+if(TARGET SampleRate::samplerate)
+  target_sources(mixxx-lib PRIVATE src/analyzer/analyzerenergy.cpp)
+  target_link_libraries(mixxx-lib PRIVATE SampleRate::samplerate)
+  target_compile_definitions(mixxx-lib PUBLIC __ENERGY__)
+else()
+  message(WARNING "Energy analysis disabled: libsamplerate not found")
 endif()
 
 # FLAC

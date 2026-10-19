@@ -2,10 +2,14 @@
 
 #include <QCheckBox>
 #include <QDialogButtonBox>
+#include <QFileInfo>
 #include <QInputDialog>
 #include <QList>
 #include <QListWidget>
+#include <QMessageBox>
 #include <QModelIndex>
+#include <QPointer>
+#include <QProcess>
 #include <QVBoxLayout>
 
 #include "analyzer/analyzerscheduledtrack.h"
@@ -592,6 +596,15 @@ void WTrackMenu::createActions() {
                 &QAction::triggered,
                 this,
                 &WTrackMenu::slotReanalyzeWithVariableTempo);
+
+        m_pSeparateStemsAction = make_parented<QAction>(tr("Separate Stems"), this);
+        m_pSeparateStemsAction->setToolTip(
+                tr("Write a .stem.mp4 (drums, bass, other, vocals) next to the file "
+                   "and add it to the library"));
+        connect(m_pSeparateStemsAction,
+                &QAction::triggered,
+                this,
+                &WTrackMenu::slotSeparateStems);
     }
 
     // This action is only usable when m_deckGroup is set. That is true only
@@ -767,6 +780,8 @@ void WTrackMenu::setupActions() {
         m_pAnalyzeMenu->addAction(m_pReanalyzeAction);
         m_pAnalyzeMenu->addAction(m_pReanalyzeConstBpmAction);
         m_pAnalyzeMenu->addAction(m_pReanalyzeVarBpmAction);
+        m_pAnalyzeMenu->addSeparator();
+        m_pAnalyzeMenu->addAction(m_pSeparateStemsAction);
         addMenu(m_pAnalyzeMenu);
     }
 
@@ -1446,6 +1461,90 @@ void WTrackMenu::slotOpenInFileBrowser() {
         locations << trackRef.getLocation();
     }
     mixxx::DesktopHelper::openInFileBrowser(locations);
+}
+
+namespace {
+
+/// Runs res/stems/mixxx_stems.py on one track at a time (the separation keeps the GPU busy)
+/// and adds each resulting .stem.mp4 to the library.
+class StemSeparationQueue : public QObject {
+  public:
+    StemSeparationQueue(Library* pLibrary, QString python, QString script)
+            : QObject(pLibrary),
+              m_pLibrary(pLibrary),
+              m_python(std::move(python)),
+              m_script(std::move(script)) {
+    }
+
+    void enqueue(const QString& location) {
+        if (!m_pending.contains(location) && location != m_running) {
+            m_pending.append(location);
+        }
+        startNext();
+    }
+
+  private:
+    void startNext() {
+        if (m_pProcess || m_pending.isEmpty()) {
+            return;
+        }
+        m_running = m_pending.takeFirst();
+        m_pProcess = new QProcess(this);
+        connect(m_pProcess,
+                &QProcess::finished,
+                this,
+                [this](int exitCode, QProcess::ExitStatus status) {
+                    const QString out = QString::fromUtf8(m_pProcess->readAllStandardOutput())
+                                                .trimmed()
+                                                .section('\n', -1)
+                                                .trimmed();
+                    const QString err = QString::fromUtf8(m_pProcess->readAllStandardError());
+                    m_pProcess->deleteLater();
+                    m_pProcess = nullptr;
+                    if (status == QProcess::NormalExit && exitCode == 0 && QFileInfo::exists(out)) {
+                        qInfo() << "Stems written to" << out;
+                        m_pLibrary->trackCollectionManager()->getOrAddTrack(
+                                TrackRef::fromFilePath(out));
+                    } else {
+                        qWarning() << "Stem separation failed for" << m_running << err.right(4000);
+                        QMessageBox::warning(nullptr,
+                                QObject::tr("Separate Stems"),
+                                QObject::tr("Stem separation failed for %1.\n\n%2")
+                                        .arg(m_running, err.right(800)));
+                    }
+                    m_running.clear();
+                    startNext();
+                });
+        qInfo() << "Separating stems:" << m_python << m_script << m_running;
+        m_pProcess->start(m_python, {m_script, m_running});
+    }
+
+    Library* const m_pLibrary;
+    const QString m_python;
+    const QString m_script;
+    QStringList m_pending;
+    QString m_running;
+    QProcess* m_pProcess = nullptr;
+};
+
+} // namespace
+
+void WTrackMenu::slotSeparateStems() {
+    // [Stems] Python: interpreter with audio-separator (and ROCm/CUDA PyTorch for a GPU);
+    // [Stems] Script: defaults to the copy shipped in the resource folder.
+    static QPointer<StemSeparationQueue> s_pQueue;
+    if (!s_pQueue) {
+        s_pQueue = new StemSeparationQueue(m_pLibrary,
+                m_pConfig->getValue(ConfigKey("[Stems]", "Python"), QStringLiteral("python")),
+                m_pConfig->getValue(ConfigKey("[Stems]", "Script"),
+                        QString(m_pConfig->getResourcePath() + QStringLiteral("stems/mixxx_stems.py"))));
+    }
+    for (const auto& trackRef : getTrackRefs()) {
+        const QString location = trackRef.getLocation();
+        if (!location.endsWith(QStringLiteral(".stem.mp4"), Qt::CaseInsensitive)) {
+            s_pQueue->enqueue(location);
+        }
+    }
 }
 
 void WTrackMenu::slotSelectInLibrary() {

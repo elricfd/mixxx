@@ -1,6 +1,8 @@
 #include "track/beatutils.h"
 
+#include <QStringList>
 #include <QtDebug>
+#include <cmath>
 
 #include "util/math.h"
 
@@ -159,6 +161,64 @@ std::optional<double> BeatUtils::steadyCoverage(
         }
     }
     return math_min(steadyFrames / analyzedFrames, 1.0);
+}
+
+// static
+QString BeatUtils::tempoMap(
+        const QVector<BeatUtils::ConstRegion>& constantRegions,
+        mixxx::audio::SampleRate sampleRate) {
+    struct Section {
+        double start;
+        double end;
+        double bpm;
+    };
+    QVector<Section> sections;
+    for (int i = 0; i < constantRegions.size() - 1; ++i) {
+        const auto beatLength = constantRegions[i].beatLength;
+        if (beatLength <= 0) {
+            continue;
+        }
+        const auto length = constantRegions[i + 1].firstBeat - constantRegions[i].firstBeat;
+        if (static_cast<int>(length / beatLength + 0.5) < kMinRegionBeatCount) {
+            continue;
+        }
+        const Section s{constantRegions[i].firstBeat.value() / sampleRate,
+                constantRegions[i + 1].firstBeat.value() / sampleRate,
+                60.0 * sampleRate / beatLength};
+        if (!sections.isEmpty() && s.start - sections.last().end < 1.0 &&
+                std::abs(s.bpm / sections.last().bpm - 1) < 0.02) {
+            // Same tempo continues: merge, weighting the tempo by duration
+            Section& last = sections.last();
+            const double w = (last.end - last.start) / (s.end - last.start);
+            last.bpm = w * last.bpm + (1 - w) * s.bpm;
+            last.end = s.end;
+        } else {
+            sections.append(s);
+        }
+    }
+    int tempos = 0;
+    for (int i = 0; i < sections.size(); ++i) {
+        if (i == 0 || std::abs(sections[i].bpm / sections[i - 1].bpm - 1) >= 0.02) {
+            ++tempos;
+        }
+    }
+    if (tempos < 2) {
+        return {};
+    }
+    const auto time = [](double secs) {
+        const int s = static_cast<int>(secs);
+        return QStringLiteral("%1:%2").arg(s / 60).arg(s % 60, 2, 10, QChar('0'));
+    };
+    QStringList parts;
+    double end = 0;
+    for (const auto& s : std::as_const(sections)) {
+        if (s.start - end >= 10.0) {
+            parts.append(time(end) + QStringLiteral(" -"));
+        }
+        parts.append(time(s.start) + ' ' + QString::number(s.bpm, 'f', 2));
+        end = s.end;
+    }
+    return parts.join(QStringLiteral(", "));
 }
 
 // static

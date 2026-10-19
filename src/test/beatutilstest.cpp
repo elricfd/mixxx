@@ -38,4 +38,19 @@ TEST(BeatUtilsTest, SteadyCoverage) {
     EXPECT_FALSE(BeatUtils::steadyCoverage(regions, 0));
 }
 
+TEST(BeatUtilsTest, TempoMapListsTempoChanges) {
+    // 60 s at 120 BPM, then 60 s at 140 BPM.
+    auto beats = clickBeats(120.0, 121);
+    const double beatLength140 = 60.0 * kSampleRate.value() / 140.0;
+    for (int i = 1; i <= 140; ++i) {
+        beats.append(beats[120] + i * beatLength140);
+    }
+    const auto regions = BeatUtils::retrieveConstRegions(beats, kSampleRate);
+    EXPECT_EQ(QStringLiteral("0:00 120.00, 1:00 140.00"), BeatUtils::tempoMap(regions, kSampleRate));
+    // One tempo only: nothing beyond the BPM to report.
+    EXPECT_TRUE(BeatUtils::tempoMap(
+            BeatUtils::retrieveConstRegions(clickBeats(128.0, 200), kSampleRate), kSampleRate)
+                    .isEmpty());
+}
+
 } // namespace

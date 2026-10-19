@@ -14,6 +14,7 @@
 #include "analyzer/plugins/analyzersoundtouchbeats.h"
 #include "library/rekordbox/rekordboxconstants.h"
 #include "track/beatfactory.h"
+#include "track/beatutils.h"
 #include "track/track.h"
 #include "util/math.h"
 
@@ -307,7 +308,11 @@ void AnalyzerBeats::storeResults(TrackPointer pTrack) {
         pBeats = mixxx::Beats::fromConstTempo(m_sampleRate, mixxx::audio::kStartFramePos, bpm);
     }
 
-    pTrack->trySetBeats(pBeats);
+    if (pTrack->trySetBeats(pBeats) && m_pPlugin->supportsBeatTracking()) {
+        pTrack->setTempoMap(BeatUtils::tempoMap(
+                BeatUtils::retrieveConstRegions(m_pPlugin->getBeats(), m_sampleRate),
+                m_sampleRate));
+    }
 }
 
 // static

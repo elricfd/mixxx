@@ -18,6 +18,8 @@ class TrackInfo final {
     MIXXX_DECL_PROPERTY(Bpm, bpm, Bpm)
     MIXXX_DECL_PROPERTY(QString, comment, Comment)
     MIXXX_DECL_PROPERTY(QString, composer, Composer)
+    // Energy level 1..10 as text (MIK convention), empty if unknown
+    MIXXX_DECL_PROPERTY(QString, energy, Energy)
 #if defined(__EXTRA_METADATA__)
     MIXXX_DECL_PROPERTY(QString, conductor, Conductor)
     MIXXX_DECL_PROPERTY(QString, discNumber, DiscNumber)
@@ -44,6 +46,8 @@ class TrackInfo final {
 #endif // __EXTRA_METADATA__
     MIXXX_DECL_PROPERTY(ReplayGain, replayGain, ReplayGain)
     MIXXX_DECL_PROPERTY(SeratoTags, seratoTags, SeratoTags)
+    // Steady-tempo sections, e.g. "0:00 120.00, 1:35 140.00", empty if unknown
+    MIXXX_DECL_PROPERTY(QString, tempoMap, TempoMap)
 #if defined(__EXTRA_METADATA__)
     MIXXX_DECL_PROPERTY(QString, subtitle, Subtitle)
 #endif // __EXTRA_METADATA__
