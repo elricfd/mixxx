@@ -6,6 +6,7 @@
 #include "analyzer/plugins/analyzerqueenmarybeats.h"
 
 #include "analyzer/constants.h"
+#include "analyzer/plugins/bassonsetfunction.h"
 
 namespace mixxx {
 namespace {
@@ -48,6 +49,7 @@ AnalyzerQueenMaryBeats::~AnalyzerQueenMaryBeats() {
 
 bool AnalyzerQueenMaryBeats::initialize(mixxx::audio::SampleRate sampleRate) {
     m_detectionResults.clear();
+    m_bassResults.clear();
     m_sampleRate = sampleRate;
     m_stepSizeFrames = static_cast<int>(m_sampleRate * kStepSecs);
     m_windowSize = MathUtilities::nextPowerOfTwo(m_sampleRate / kMaximumBinSizeHz);
@@ -62,6 +64,18 @@ bool AnalyzerQueenMaryBeats::initialize(mixxx::audio::SampleRate sampleRate) {
                         m_pDetectionFunction->processTimeDomain(pWindow));
                 return true;
             });
+
+    // Twice the window for ~21 Hz bins in the kick band. Same step and the
+    // same centring of the first frame, so both results line up.
+    const int bassWindowSize = 2 * m_windowSize;
+    m_pBassOnsetFunction = std::make_unique<BassOnsetFunction>(
+            m_sampleRate, bassWindowSize);
+    m_bassHelper.initialize(
+            bassWindowSize, m_stepSizeFrames, [this](double* pWindow, size_t) {
+                m_bassResults.push_back(
+                        m_pBassOnsetFunction->processTimeDomain(pWindow));
+                return true;
+            });
     return true;
 }
 
@@ -71,11 +85,13 @@ bool AnalyzerQueenMaryBeats::processSamples(const CSAMPLE* pIn, SINT iLen) {
         return false;
     }
 
-    return m_helper.processStereoSamples(pIn, iLen);
+    return m_helper.processStereoSamples(pIn, iLen) &&
+            m_bassHelper.processStereoSamples(pIn, iLen);
 }
 
 bool AnalyzerQueenMaryBeats::finalize() {
     m_helper.finalize();
+    m_bassHelper.finalize();
 
     std::size_t nonZeroCount = m_detectionResults.size();
     while (nonZeroCount > 0 && m_detectionResults.at(nonZeroCount - 1) <= 0.0) {
@@ -93,9 +109,14 @@ bool AnalyzerQueenMaryBeats::finalize() {
     for (std::size_t i = 2; i < nonZeroCount; ++i) {
         df.push_back(m_detectionResults.at(i));
     }
+    std::vector<double> bassDf;
+    bassDf.reserve(required_size);
+    for (std::size_t i = 2; i < nonZeroCount && i < m_bassResults.size(); ++i) {
+        bassDf.push_back(m_bassResults.at(i));
+    }
 
     TempoTrackV2 tt(m_sampleRate, m_stepSizeFrames);
-    tt.calculateBeatPeriod(df, beatPeriod);
+    tt.calculateBeatPeriod(df, bassDf, beatPeriod);
 
     std::vector<double> beats;
     tt.calculateBeats(df, beatPeriod, beats);
@@ -110,6 +131,7 @@ bool AnalyzerQueenMaryBeats::finalize() {
     }
 
     m_pDetectionFunction.reset();
+    m_pBassOnsetFunction.reset();
     return true;
 }
 

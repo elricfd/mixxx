@@ -108,3 +108,188 @@ index 879f8a8..7d62253 100644
  }
 +
 
+diff --git a/lib/qm-dsp/dsp/tempotracking/TempoTrackV2.cpp b/lib/qm-dsp/dsp/tempotracking/TempoTrackV2.cpp
+index 4a775c04f3..6120012e8f 100644
+--- a/lib/qm-dsp/dsp/tempotracking/TempoTrackV2.cpp
++++ b/lib/qm-dsp/dsp/tempotracking/TempoTrackV2.cpp
+@@ -15,6 +15,7 @@
+ 
+ #include "TempoTrackV2.h"
+ 
++#include <algorithm>
+ #include <cmath>
+ #include <cstdlib>
+ #include <iostream>
+@@ -109,6 +110,20 @@ TempoTrackV2::calculateBeatPeriod(const vector<double> &df,
+     // then call viterbi decoding with weight vector and transition matrix
+     // and get best path
+ 
++    d_vec_t wv;
++    get_wv(inputtempo, constraintempo, wv);
++
++    d_mat_t rcfmat;
++    get_rcfmat(df, wv, rcfmat);
++
++    // now call viterbi decoding function
++    viterbi_decode(rcfmat,wv,beat_period);
++}
++
++
++void
++TempoTrackV2::get_wv(double inputtempo, bool constraintempo, d_vec_t &wv)
++{
+     const int wv_len = 128;
+ 
+     // MEPD 28/11/12
+@@ -120,7 +135,7 @@ TempoTrackV2::calculateBeatPeriod(const vector<double> &df,
+     const double rayparam = (60 * 44100 / 512.0) / inputtempo;
+ 
+     // make rayleigh weighting curve
+-    d_vec_t wv(wv_len);
++    wv.assign(wv_len, 0.);
+ 
+     // check whether or not to use rayleigh weighting (if constraintempo is false)
+     // or use gaussian weighting it (constraintempo is true)
+@@ -137,6 +152,13 @@ TempoTrackV2::calculateBeatPeriod(const vector<double> &df,
+             wv[i] = (double(i) / pow(rayparam,2.)) * exp((-1.*pow(-double(i),2.)) / (2.*pow(rayparam,2.)));
+         }
+     }
++}
++
++
++void
++TempoTrackV2::get_rcfmat(const d_vec_t &df, const d_vec_t &wv, d_mat_t &rcfmat)
++{
++    const int wv_len = int(wv.size());
+ 
+     // Beat tracking window length (roughly 6 seconds) and hop size (1.5 seconds)
+     int winlen = 512;
+@@ -145,7 +167,7 @@ TempoTrackV2::calculateBeatPeriod(const vector<double> &df,
+     int df_len = int(df.size());
+     
+     // Matrix to store output of comb filter bank
+-    d_mat_t rcfmat;
++    rcfmat.clear();
+     rcfmat.reserve(df_len / hopsize + 1);
+     d_vec_t dfframe(winlen);
+     d_vec_t rcf(wv_len);
+@@ -170,6 +192,10 @@ TempoTrackV2::calculateBeatPeriod(const vector<double> &df,
+ 
+         // Apply the resonator comb filter (RCF) bank to the window
+         // The result is a vector of filter responses for different periods.
++        // Mixxx: get_rcf() accumulates into rcf, so start each window from
++        // zero (as upstream qm-dsp does by allocating it per window) instead
++        // of on top of the previous window's normalised response.
++        std::fill(rcf.begin(), rcf.end(), 0.0);
+         get_rcf(dfframe, wv, rcf);
+ 
+         // Append the result to rcfmat as a new column 
+@@ -178,11 +204,78 @@ TempoTrackV2::calculateBeatPeriod(const vector<double> &df,
+             rcfmat.back().push_back(rcf[j]);
+         }
+     }
++}
+ 
+-    // now call viterbi decoding function
+-    viterbi_decode(rcfmat,wv,beat_period);
++namespace {
++
++// Median of the first n entries (the rows that viterbi_decode() filled).
++double median_period(std::vector<int> periods, std::size_t n)
++{
++    if (n == 0 || n > periods.size()) {
++        return 0.;
++    }
++    periods.resize(n);
++    std::sort(periods.begin(), periods.end());
++    return n % 2 ? periods[n / 2] : 0.5 * (periods[n / 2 - 1] + periods[n / 2]);
+ }
+ 
++} // namespace
++
++// Mixxx: tempo from two onset detection functions of the same frame rate,
++// e.g. the broadband df and a bass-band df.
++//
++// The broadband df of dance music is often dominated by off-beat
++// subdivisions such as hi-hats, whose periodicity cannot tell a beat period
++// from one of 1.5 beats (or 0.75 beats from one beat), so the tracker locks
++// to 2/3 or 4/3 of the tempo. Multiplying in the periodicity distribution of
++// the bass-band df, which repeats at the beat, resolves that duple/triple
++// ambiguity. Bass lines are not a reliable guide to the octave (half-time
++// and eighth-note bass is common), so the combined path is only used when it
++// moves the beat period by such a triple ratio; otherwise the broadband
++// result is kept unchanged.
++void
++TempoTrackV2::calculateBeatPeriod(const vector<double> &df,
++                                  const vector<double> &df2,
++                                  vector<int> &beat_period)
++{
++    d_vec_t wv;
++    get_wv(120.0, false, wv);
++    const int wv_len = int(wv.size());
++
++    d_mat_t rcfmat;
++    get_rcfmat(df, wv, rcfmat);
++    d_mat_t rcfmat2;
++    get_rcfmat(df2, wv, rcfmat2);
++
++    i_vec_t broadband(beat_period);
++    viterbi_decode(rcfmat, wv, broadband);
++
++    const std::size_t T = std::min(rcfmat.size(), rcfmat2.size());
++    rcfmat.resize(T);
++    for (std::size_t t = 0; t < T; t++) {
++        double sum = 0.;
++        for (int j = 0; j < wv_len; j++) {
++            rcfmat[t][j] *= rcfmat2[t][j];
++            sum += rcfmat[t][j];
++        }
++        for (int j = 0; j < wv_len; j++) {
++            rcfmat[t][j] /= (sum + EPS);
++        }
++    }
++    i_vec_t combined(beat_period);
++    viterbi_decode(rcfmat, wv, combined);
++
++    const double broadbandPeriod = median_period(broadband, T);
++    const double combinedPeriod = median_period(combined, T);
++    bool triple = false;
++    if (broadbandPeriod > 0. && combinedPeriod > 0.) {
++        const double ratio = combinedPeriod / broadbandPeriod;
++        const double tolerance = 0.05;
++        triple = std::fabs(ratio / (2. / 3.) - 1.) <= tolerance ||
++                std::fabs(ratio / (4. / 3.) - 1.) <= tolerance;
++    }
++    beat_period = triple ? combined : broadband;
++}
+ 
+ void
+ TempoTrackV2::get_rcf(const d_vec_t &dfframe_in, const d_vec_t &wv, d_vec_t &rcf)
+diff --git a/lib/qm-dsp/dsp/tempotracking/TempoTrackV2.h b/lib/qm-dsp/dsp/tempotracking/TempoTrackV2.h
+index eff6a17786..b8fcfc9bb0 100644
+--- a/lib/qm-dsp/dsp/tempotracking/TempoTrackV2.h
++++ b/lib/qm-dsp/dsp/tempotracking/TempoTrackV2.h
+@@ -50,6 +50,14 @@ public:
+                              std::vector<int> &beatPeriod,
+                              double inputtempo, bool constraintempo);
+ 
++    // Mixxx: beat periods from two detection functions with the same
++    // increment, e.g. broadband and bass band. The second one is used to
++    // correct beat periods that are 2/3 or 4/3 of the true one.
++    // Default tempo weighting (120 bpm Rayleigh).
++    void calculateBeatPeriod(const std::vector<double> &df,
++                             const std::vector<double> &df2,
++                             std::vector<int> &beatPeriod);
++
+     // Returned beat positions are given in df increment units
+     void calculateBeats(const std::vector<double> &df,
+                         const std::vector<int> &beatPeriod,
+@@ -77,6 +85,8 @@ private:
+     void adapt_thresh(d_vec_t &df);
+     double mean_array(const d_vec_t &dfin, int start, int end);
+     void filter_df(d_vec_t &df);
++    void get_wv(double inputtempo, bool constraintempo, d_vec_t &wv);
++    void get_rcfmat(const d_vec_t &df, const d_vec_t &wv, d_mat_t &rcfmat);
+     void get_rcf(const d_vec_t &dfframe, const d_vec_t &wv, d_vec_t &rcf);
+     void viterbi_decode(const d_mat_t &rcfmat, const d_vec_t &wv, i_vec_t &bp);
+     double get_max_val(const d_vec_t &df);
