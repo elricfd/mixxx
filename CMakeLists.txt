@@ -1212,6 +1212,7 @@ add_library(
   src/analyzer/plugins/analyzerqueenmarybeats.cpp
   src/analyzer/plugins/analyzerqueenmarykey.cpp
   src/analyzer/plugins/analyzersoundtouchbeats.cpp
+  src/analyzer/plugins/bassonsetfunction.cpp
   src/analyzer/plugins/buffering_utils.cpp
   src/analyzer/trackanalysisscheduler.cpp
   src/audio/frame.cpp
@@ -2925,6 +2926,7 @@ if(BUILD_TESTING)
   set(
     src-mixxx-test
     src/test/analyserwaveformtest.cpp
+    src/test/analyzerqueenmarybeats_test.cpp
     src/test/analyzersilence_test.cpp
     src/test/audiotaperpot_test.cpp
     src/test/autodjprocessor_test.cpp
@@ -3028,6 +3030,7 @@ if(BUILD_TESTING)
     src/test/synctrackmetadatatest.cpp
     src/test/tableview_test.cpp
     src/test/taglibtest.cpp
+    src/test/tempotrackv2_test.cpp
     src/test/trackdao_test.cpp
     src/test/trackexport_test.cpp
     src/test/trackmetadata_test.cpp
@@ -4846,6 +4849,9 @@ target_include_directories(
   PUBLIC lib/qm-dsp lib/qm-dsp/include
 )
 target_link_libraries(mixxx-lib PRIVATE QueenMaryDsp)
+if(BUILD_TESTING)
+  target_link_libraries(mixxx-test PRIVATE QueenMaryDsp)
+endif()
 
 # ReplayGain
 add_library(ReplayGain STATIC EXCLUDE_FROM_ALL lib/replaygain/replaygain.cpp)
