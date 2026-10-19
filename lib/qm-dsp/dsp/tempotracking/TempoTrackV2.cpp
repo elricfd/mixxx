@@ -219,6 +219,49 @@ double median_period(std::vector<int> periods, std::size_t n)
     return n % 2 ? periods[n / 2] : 0.5 * (periods[n / 2 - 1] + periods[n / 2]);
 }
 
+// Strongest df value within +-2 frames of pos.
+double onset_near(const std::vector<double> &df, double pos)
+{
+    const long n = long(df.size());
+    const long c = std::lround(pos);
+    double best = 0.;
+    for (long i = std::max(c - 2, 0L); i <= std::min(c + 2, n - 1); i++) {
+        best = std::max(best, df[i]);
+    }
+    return best;
+}
+
+// (even - odd) / (even + odd) of the mean onset strength at the beats.
+double alternation(const std::vector<double> &df, const std::vector<double> &beats)
+{
+    double sum[2] = {0., 0.};
+    int count[2] = {0, 0};
+    for (std::size_t k = 0; k < beats.size(); k++) {
+        sum[k % 2] += onset_near(df, beats[k]);
+        count[k % 2]++;
+    }
+    const double even = sum[0] / std::max(count[0], 1);
+    const double odd = sum[1] / std::max(count[1], 1);
+    return even + odd > 0. ? (even - odd) / (even + odd) : 0.;
+}
+
+// Periodicity mass within +-2 lags of lag.
+double mass_near(const std::vector<double> &profile, double lag)
+{
+    const long n = long(profile.size());
+    const long c = std::lround(lag);
+    double sum = 0.;
+    for (long i = std::max(c - 2, 0L); i <= std::min(c + 2, n - 1); i++) {
+        sum += profile[i];
+    }
+    return sum;
+}
+
+// Logistic models for the metrical level (calculateBeats() with two
+// detection functions). A positive score means double / halve the tempo.
+const double kDouble[5] = {-5.2941, -4.1074, -3.7958, 2.4144, 2.1242};
+const double kHalve[4] = {-3.5413, 4.2066, 2.8864, 1.0546};
+
 } // namespace
 
 // Mixxx: tempo from two onset detection functions of the same frame rate,
@@ -238,6 +281,17 @@ TempoTrackV2::calculateBeatPeriod(const vector<double> &df,
                                   const vector<double> &df2,
                                   vector<int> &beat_period)
 {
+    d_vec_t profile, profile2;
+    gated_beat_period(df, df2, beat_period, profile, profile2);
+}
+
+// Also returns the mean periodicity distribution of each df and the
+// number of beat periods decoded.
+std::size_t
+TempoTrackV2::gated_beat_period(const d_vec_t &df, const d_vec_t &df2,
+                                i_vec_t &beat_period,
+                                d_vec_t &profile, d_vec_t &profile2)
+{
     d_vec_t wv;
     get_wv(120.0, false, wv);
     const int wv_len = int(wv.size());
@@ -252,9 +306,13 @@ TempoTrackV2::calculateBeatPeriod(const vector<double> &df,
 
     const std::size_t T = std::min(rcfmat.size(), rcfmat2.size());
     rcfmat.resize(T);
+    profile.assign(wv_len, 0.);
+    profile2.assign(wv_len, 0.);
     for (std::size_t t = 0; t < T; t++) {
         double sum = 0.;
         for (int j = 0; j < wv_len; j++) {
+            profile[j] += rcfmat[t][j] / T;
+            profile2[j] += rcfmat2[t][j] / T;
             rcfmat[t][j] *= rcfmat2[t][j];
             sum += rcfmat[t][j];
         }
@@ -275,6 +333,77 @@ TempoTrackV2::calculateBeatPeriod(const vector<double> &df,
                 std::fabs(ratio / (4. / 3.) - 1.) <= tolerance;
     }
     beat_period = triple ? combined : broadband;
+    return T;
+}
+
+// Mixxx: beats from the broadband df and the bass-band df2, at the metrical
+// level the evidence favours.
+//
+// The comb filter and its 120 bpm prior often settle one octave off: drum
+// and bass at 170 bpm is tracked at 85, slow songs with busy eighth notes at
+// twice their tempo. Two small logistic models, fitted on GiantSteps and
+// GTZAN, decide from the tempo, the even/odd alternation of onset strength
+// at the beats, the kick-band onsets between the beats and the periodicity
+// at half the beat period whether the tracked beats are really half beats
+// or double beats. If so, the beats are tracked again at half or twice the
+// beat period.
+void
+TempoTrackV2::calculateBeats(const vector<double> &df,
+                             const vector<double> &df2,
+                             vector<double> &beats)
+{
+    i_vec_t beat_period(df.size() / 128 + 1);
+    d_vec_t profile, profile2;
+    const std::size_t rows =
+            gated_beat_period(df, df2, beat_period, profile, profile2);
+    beats.clear();
+    calculateBeats(df, beat_period, beats);
+
+    const std::size_t n = beats.size();
+    const double period = median_period(beat_period, rows);
+    if (n < 8 || period <= 0. || df2.empty()) {
+        return;
+    }
+
+    const double alt = alternation(df, beats);
+    const double alt2 = alternation(df2, beats);
+    double onBeat2 = 0.;
+    double offBeat2 = 0.;
+    for (std::size_t k = 0; k + 1 < n; k++) {
+        const double d = beats[k + 1] - beats[k];
+        onBeat2 += onset_near(df2, beats[k]);
+        offBeat2 += 0.5 * (onset_near(df2, beats[k] + d / 4) +
+                onset_near(df2, beats[k] + 3 * d / 4));
+    }
+    const double quarter2 = onBeat2 > 0. ? offBeat2 / onBeat2 : 0.;
+    const double half = mass_near(profile, period / 2) /
+            (mass_near(profile, period) + EPS);
+    const double half2 = mass_near(profile2, period / 2) /
+            (mass_near(profile2, period) + EPS);
+    const double log2Tempo =
+            std::log2(60. * m_rate / (m_increment * period) / 120.);
+
+    const double doubleScore = kDouble[0] + kDouble[1] * log2Tempo +
+            kDouble[2] * std::fabs(alt) + kDouble[3] * quarter2 +
+            kDouble[4] * half;
+    const double halveScore = kHalve[0] + kHalve[1] * log2Tempo +
+            kHalve[2] * alt * alt2 + kHalve[3] * half2;
+
+    // Track the beats again at the chosen level, so that they follow the
+    // onsets rather than being interpolated.
+    if (doubleScore > 0. && doubleScore >= halveScore) {
+        for (int &p : beat_period) {
+            p = (p + 1) / 2;
+        }
+    } else if (halveScore > 0.) {
+        for (int &p : beat_period) {
+            p *= 2;
+        }
+    } else {
+        return;
+    }
+    beats.clear();
+    calculateBeats(df, beat_period, beats);
 }
 
 void

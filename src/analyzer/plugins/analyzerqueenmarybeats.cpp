@@ -102,7 +102,6 @@ bool AnalyzerQueenMaryBeats::finalize() {
 
     std::vector<double> df;
     df.reserve(required_size);
-    auto beatPeriod = std::vector<int>(required_size / 128 + 1);
 
     // skip first 2 results as it might have detect noise as onset
     // that's how vamp does and seems works best this way
@@ -116,10 +115,8 @@ bool AnalyzerQueenMaryBeats::finalize() {
     }
 
     TempoTrackV2 tt(m_sampleRate, m_stepSizeFrames);
-    tt.calculateBeatPeriod(df, bassDf, beatPeriod);
-
     std::vector<double> beats;
-    tt.calculateBeats(df, beatPeriod, beats);
+    tt.calculateBeats(df, bassDf, beats);
 
     m_resultBeats.reserve(static_cast<int>(beats.size()));
     for (std::size_t i = 0; i < beats.size(); ++i) {
