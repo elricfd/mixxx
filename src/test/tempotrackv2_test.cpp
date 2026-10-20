@@ -68,6 +68,97 @@ TEST(TempoTrackV2Test, HalfTimeBassKeepsBeat) {
     EXPECT_EQ(broadband, medianPeriod(beatPeriod(df, bassDf)));
 }
 
+// Onset functions of real audio are never silent between onsets.
+void addNoise(std::vector<double>* pDf, double gain, unsigned int seed) {
+    for (double& value : *pDf) {
+        seed = seed * 1664525u + 1013904223u;
+        value += gain * (seed >> 8) / static_cast<double>(1 << 24);
+    }
+}
+
+void addImpulsesAt(std::vector<double>* pDf, double offset, double period, double gain) {
+    for (double t = offset; t < pDf->size(); t += period) {
+        (*pDf)[static_cast<std::size_t>(std::lround(t)) % pDf->size()] += gain;
+    }
+}
+
+// Drum and bass two-step: kick on 1 and the "and" of 2, snare on 2 and 4,
+// eighth-note hats.
+void makeTwoStep(double bpm, std::vector<double>* pDf, std::vector<double>* pBassDf) {
+    const double beat = 60.0 / bpm * kFramesPerSecond;
+    pDf->assign(kLength, 0.0);
+    pBassDf->assign(kLength, 0.0);
+    for (std::vector<double>* pOnsets : {pDf, pBassDf}) {
+        addImpulsesAt(pOnsets, 0.0, 4 * beat, 1.0);
+        addImpulsesAt(pOnsets, 2.5 * beat, 4 * beat, 1.0);
+    }
+    addImpulsesAt(pDf, beat, 2 * beat, 1.2);
+    addImpulses(pDf, beat / 2, 0.3);
+    addNoise(pDf, 0.1, 1);
+    addNoise(pBassDf, 0.1, 2);
+}
+
+double medianInterval(const std::vector<double>& beats) {
+    std::vector<double> intervals;
+    for (std::size_t i = 1; i < beats.size(); ++i) {
+        intervals.push_back(beats[i] - beats[i - 1]);
+    }
+    std::sort(intervals.begin(), intervals.end());
+    return intervals[intervals.size() / 2];
+}
+
+std::vector<double> beatsAtPeriod(const std::vector<double>& df,
+        const std::vector<double>& bassDf) {
+    TempoTrackV2 tt(44100, 512);
+    std::vector<double> beats;
+    tt.calculateBeats(df, beatPeriod(df, bassDf), beats);
+    return beats;
+}
+
+std::vector<double> beatsAtLevel(const std::vector<double>& df,
+        const std::vector<double>& bassDf) {
+    TempoTrackV2 tt(44100, 512);
+    std::vector<double> beats;
+    tt.calculateBeats(df, bassDf, beats);
+    return beats;
+}
+
+TEST(TempoTrackV2Test, DoublesHalfTimeDrumAndBass) {
+    std::vector<double> df;
+    std::vector<double> bassDf;
+    makeTwoStep(174.0, &df, &bassDf);
+    const double beat = 60.0 / 174.0 * kFramesPerSecond;
+
+    // The comb filter settles on half the tempo; the metrical level is
+    // corrected when the beats are tracked.
+    EXPECT_NEAR(2 * beat, medianInterval(beatsAtPeriod(df, bassDf)), 2.0);
+    EXPECT_NEAR(beat, medianInterval(beatsAtLevel(df, bassDf)), 1.0);
+}
+
+TEST(TempoTrackV2Test, KeepsTrackedDrumAndBassBeat) {
+    std::vector<double> df;
+    std::vector<double> bassDf;
+    makeTwoStep(170.0, &df, &bassDf);
+
+    const std::vector<double> beats = beatsAtPeriod(df, bassDf);
+    EXPECT_NEAR(60.0 / 170.0 * kFramesPerSecond, medianInterval(beats), 1.0);
+    EXPECT_EQ(beats, beatsAtLevel(df, bassDf));
+}
+
+TEST(TempoTrackV2Test, KeepsFourOnTheFloorBeat) {
+    std::vector<double> df(kLength, 0.0);
+    addImpulses(&df, kBeat, 1.0);
+    addImpulses(&df, kBeat / 4, 0.3);
+    addNoise(&df, 0.1, 1);
+    std::vector<double> bassDf(kLength, 0.0);
+    addImpulses(&bassDf, kBeat, 1.0);
+    addNoise(&bassDf, 0.1, 2);
+
+    const std::vector<double> beats = beatsAtPeriod(df, bassDf);
+    EXPECT_NEAR(kBeat, medianInterval(beats), 1.0);
+    EXPECT_EQ(beats, beatsAtLevel(df, bassDf));
+}
+
 TEST(TempoTrackV2Test, SilentBassKeepsBroadbandResult) {
     std::vector<double> df(kLength, 0.0);
     addImpulses(&df, kBeat, 1.0);

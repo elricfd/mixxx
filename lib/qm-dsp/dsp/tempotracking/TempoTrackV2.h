@@ -73,6 +73,13 @@ public:
                         std::vector<double> &beats,
                         double alpha, double tightness);
 
+    // Mixxx: beat periods as calculateBeatPeriod(df, df2, beatPeriod), then
+    // beats, doubled or halved when the broadband and bass-band evidence
+    // says the tracked beats are half or double beats.
+    void calculateBeats(const std::vector<double> &df,
+                        const std::vector<double> &df2,
+                        std::vector<double> &beats);
+
 private:
     typedef std::vector<int> i_vec_t;
     typedef std::vector<std::vector<int> > i_mat_t;
@@ -88,6 +95,9 @@ private:
     void get_wv(double inputtempo, bool constraintempo, d_vec_t &wv);
     void get_rcfmat(const d_vec_t &df, const d_vec_t &wv, d_mat_t &rcfmat);
     void get_rcf(const d_vec_t &dfframe, const d_vec_t &wv, d_vec_t &rcf);
+    std::size_t gated_beat_period(const d_vec_t &df, const d_vec_t &df2,
+                                  i_vec_t &beatPeriod,
+                                  d_vec_t &profile, d_vec_t &profile2);
     void viterbi_decode(const d_mat_t &rcfmat, const d_vec_t &wv, i_vec_t &bp);
     double get_max_val(const d_vec_t &df);
     int get_max_ind(const d_vec_t &df);
