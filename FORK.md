@@ -8,7 +8,7 @@ reference throughout is Mixed In Key 11, and the evaluation scripts are in `../m
 
 | Area | This build | Stock Mixxx | Measured |
 |---|---|---|---|
-| BPM | Beat This! neural beat tracker (ONNX Runtime); Queen Mary with a bass-band fix as fallback | Queen Mary | GiantSteps EDM exact tempo 81.0% vs 35.7%; GTZAN 82.8% vs 71.2% |
+| BPM | Beat This! neural beat tracker (ONNX Runtime); Queen Mary with a bass-band fix as fallback; beatless gaps can no longer set the tempo | Queen Mary | GiantSteps EDM exact tempo 81.9% vs 35.7%; GTZAN 82.9% vs 71.2%; no results below 40 BPM on GiantSteps (was 14) |
 | Tempo changes | Tempo Map: steady sections, e.g. `0:00 -, 0:35 120.00, 2:10 140.00` ("-" = no steady beat) | none | unit tested |
 | Key | OpenKeyScan 3 (KeyNet CNN, ONNX); falls back to KeyFinder, then Queen Mary | Queen Mary | exact match with MIK on 298 tracks: 60.1% vs 36% (KeyFinder 43.6%) |
 | Energy | New 1–10 rating (7 audio features, 150 boosted trees fitted to MIK) | none | vs MIK on 2218 tracks (5-fold CV): 53.5% exact, 92.9% within ±1 |
@@ -16,6 +16,9 @@ reference throughout is Mixed In Key 11, and the evaluation scripts are in `../m
 
 The library gets an Energy column (editable, sorted as a number) and a Tempo Map column (hidden by
 default); the database moves to schema 41.
+
+At most 4 ONNX model runs happen at once, and ONNX Runtime's memory pool is off: analyzing 26 tracks
+peaked at 4.4 GB (15.9 GB before) and memory is released afterwards.
 
 ## Tags
 
@@ -44,7 +47,7 @@ written when Preferences → Library → "Synchronize library track metadata to 
 
 ## Known test failures
 
-1307 of 1314 tests pass. The 7 failures are all in code this fork does not touch: 4 controller
+1308 of 1315 tests pass. The 7 failures are all in code this fork does not touch: 4 controller
 script timer tests that are timing-sensitive on this machine, 2 QML tests, and
 `TrackMetadataExportTest.keepWithespaceKey`. The last one fails only after
 `ControllerScriptEngineLegacyTest` runs in the same process, and passes on its own.

@@ -17,6 +17,9 @@ constexpr double kMaxSecsPhaseError = 0.025;
 constexpr double kMaxSecsPhaseErrorSum = 0.1;
 constexpr int kMaxOutliersCount = 1;
 constexpr int kMinRegionBeatCount = 16;
+// Plausible range for tempo map sections
+constexpr double kMinTempoMapBpm = 40;
+constexpr double kMaxTempoMapBpm = 220;
 
 } // namespace
 
@@ -185,6 +188,10 @@ QString BeatUtils::tempoMap(
         const Section s{constantRegions[i].firstBeat.value() / sampleRate,
                 constantRegions[i + 1].firstBeat.value() / sampleRate,
                 60.0 * sampleRate / beatLength};
+        if (s.bpm < kMinTempoMapBpm || s.bpm > kMaxTempoMapBpm) {
+            // Tracker artefacts (e.g. 340 BPM double-time flips): leave as a gap
+            continue;
+        }
         if (!sections.isEmpty() && s.start - sections.last().end < 1.0 &&
                 std::abs(s.bpm / sections.last().bpm - 1) < 0.02) {
             // Same tempo continues: merge, weighting the tempo by duration
@@ -246,18 +253,30 @@ mixxx::Bpm BeatUtils::makeConstBpm(
     // Note: This function is channel count independent. All sample based values in
     // this functions are based on frames.
 
+    // Only regions with enough beats qualify: a beatless gap (Beat This! emits no
+    // beats there) is a long region holding a single "beat", which would otherwise
+    // win and give tempos like 1.6 BPM. Fall back to 2 beats if no region has enough.
     int midRegionIndex = 0;
     mixxx::audio::FrameDiff_t longestRegionLength = 0;
     mixxx::audio::FrameDiff_t longestRegionBeatLength = 0;
-    for (int i = 0; i < constantRegions.size() - 1; ++i) {
-        mixxx::audio::FrameDiff_t length =
-                constantRegions[i + 1].firstBeat - constantRegions[i].firstBeat;
-        if (length > longestRegionLength) {
-            longestRegionLength = length;
-            longestRegionBeatLength = constantRegions[i].beatLength;
-            midRegionIndex = i;
+    for (const int minBeats : {kMinRegionBeatCount, 2}) {
+        for (int i = 0; i < constantRegions.size() - 1; ++i) {
+            const mixxx::audio::FrameDiff_t length =
+                    constantRegions[i + 1].firstBeat - constantRegions[i].firstBeat;
+            if (constantRegions[i].beatLength <= 0 ||
+                    static_cast<int>(length / constantRegions[i].beatLength + 0.5) <
+                            minBeats) {
+                continue;
+            }
+            if (length > longestRegionLength) {
+                longestRegionLength = length;
+                longestRegionBeatLength = constantRegions[i].beatLength;
+                midRegionIndex = i;
+            }
         }
-        //qDebug() << i << length << constantRegions[i].beatLength;
+        if (longestRegionLength > 0) {
+            break;
+        }
     }
 
     if (longestRegionLength == 0) {

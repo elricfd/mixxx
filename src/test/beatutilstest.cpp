@@ -29,6 +29,20 @@ TEST(BeatUtilsTest, MakeConstBpmKeepsOrdinaryTempo) {
     EXPECT_DOUBLE_EQ(200.0, constBpm(200.0).value());
 }
 
+TEST(BeatUtilsTest, MakeConstBpmIgnoresBeatlessGap) {
+    // 20 beats at 120 BPM, 40 s without beats, 20 more: the gap is the longest
+    // "region" but holds a single beat, so it must not set the tempo.
+    auto beats = clickBeats(120.0, 20);
+    const double beatLength = 60.0 * kSampleRate.value() / 120.0;
+    const auto resume = beats.last() + 40.0 * kSampleRate.value();
+    for (int i = 0; i < 20; ++i) {
+        beats.append(resume + i * beatLength);
+    }
+    const auto regions = BeatUtils::retrieveConstRegions(beats, kSampleRate);
+    auto firstBeat = mixxx::audio::kStartFramePos;
+    EXPECT_NEAR(120.0, BeatUtils::makeConstBpm(regions, kSampleRate, &firstBeat).value(), 0.5);
+}
+
 TEST(BeatUtilsTest, SteadyCoverage) {
     const auto regions = BeatUtils::retrieveConstRegions(clickBeats(120.0, 41), kSampleRate);
     // 40 beats at 120 BPM = 20 s steady out of 40 s analyzed.

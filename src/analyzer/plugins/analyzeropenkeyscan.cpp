@@ -79,6 +79,7 @@ bool AnalyzerOpenKeyScan::finalize() {
                 logits.size(),
                 outputShape.data(),
                 outputShape.size());
+        const OnnxRunSlot slot;
         pSession->Run(Ort::RunOptions{nullptr}, inputNames, &input, 1, outputNames, &output, 1);
     } catch (const Ort::Exception& e) {
         qWarning() << "OpenKeyScan: inference failed:" << e.what();

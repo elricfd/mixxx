@@ -19,6 +19,19 @@ namespace mixxx {
 /// (Ort::Session::Run is thread-safe). Returns null if the model fails to load.
 std::shared_ptr<Ort::Session> onnxSession(const QString& modelPath);
 
+/// Hold one while calling Ort::Session::Run. Mixxx analyzes many tracks at once
+/// (one thread per core) and a Beat This! run peaks near 800 MB, so at most
+/// kMaxConcurrentRuns models run at the same time.
+class OnnxRunSlot {
+  public:
+    // ponytail: fixed at 4 (x 2 intra-op threads); make it a preference if machines differ a lot
+    static constexpr int kMaxConcurrentRuns = 4;
+    OnnxRunSlot();
+    ~OnnxRunSlot();
+    OnnxRunSlot(const OnnxRunSlot&) = delete;
+    OnnxRunSlot& operator=(const OnnxRunSlot&) = delete;
+};
+
 /// Collects a whole track as mono float at a fixed model sample rate:
 /// interleaved stereo in, averaged, resampled with libsamplerate.
 class MonoResampler {

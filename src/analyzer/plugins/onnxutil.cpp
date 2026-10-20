@@ -5,6 +5,7 @@
 
 #include <QDir>
 #include <QMutex>
+#include <QSemaphore>
 #include <QtDebug>
 #include <map>
 
@@ -26,6 +27,9 @@ std::shared_ptr<Ort::Session> onnxSession(const QString& modelPath) {
         Ort::SessionOptions options;
         // Several tracks are analyzed in parallel; keep each one modest.
         options.SetIntraOpNumThreads(2);
+        // The arena keeps the peak of all concurrent runs forever (15 GB after a
+        // 26-track batch); without it memory goes back after every run.
+        options.DisableCpuMemArena();
         options.SetGraphOptimizationLevel(GraphOptimizationLevel::ORT_ENABLE_ALL);
 #ifdef _WIN32
         const std::wstring path = QDir::toNativeSeparators(modelPath).toStdWString();
@@ -38,6 +42,18 @@ std::shared_ptr<Ort::Session> onnxSession(const QString& modelPath) {
     }
     sessions[modelPath] = pSession; // also cache failures
     return pSession;
+}
+
+namespace {
+QSemaphore s_runSlots(OnnxRunSlot::kMaxConcurrentRuns);
+} // namespace
+
+OnnxRunSlot::OnnxRunSlot() {
+    s_runSlots.acquire();
+}
+
+OnnxRunSlot::~OnnxRunSlot() {
+    s_runSlots.release();
 }
 
 MonoResampler::~MonoResampler() {

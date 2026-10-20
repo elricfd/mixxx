@@ -112,6 +112,7 @@ bool AnalyzerBeatThis::finalize() {
                     pred.size(),
                     outputShape.data(),
                     outputShape.size());
+            const OnnxRunSlot slot;
             pSession->Run(Ort::RunOptions{nullptr}, inputNames, &input, 1, outputNames, &output, 1);
             return true;
         } catch (const Ort::Exception& e) {
