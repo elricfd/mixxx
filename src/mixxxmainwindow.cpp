@@ -30,6 +30,7 @@
 #include "dialog/dlgabout.h"
 #include "dialog/dlgdevelopertools.h"
 #include "dialog/dlgkeywheel.h"
+#include "mixxxapplication.h"
 #include "moc_mixxxmainwindow.cpp"
 #include "preferences/dialog/dlgpreferences.h"
 #ifdef __BROADCAST__
@@ -72,6 +73,7 @@
 
 namespace {
 const ConfigKey kHideMenuBarConfigKey = ConfigKey("[Config]", "hide_menubar");
+const ConfigKey kDarkDialogsConfigKey = ConfigKey("[Config]", "DarkDialogs");
 const ConfigKey kMenuBarHintConfigKey = ConfigKey("[Config]", "show_menubar_hint");
 } // namespace
 
@@ -116,6 +118,9 @@ MixxxMainWindow::MixxxMainWindow(std::shared_ptr<mixxx::CoreServices> pCoreServi
             &mixxx::CoreServices::libraryScanSummary,
             this,
             &MixxxMainWindow::slotLibraryScanSummaryDlg);
+
+    MixxxApplication::setDarkDialogs(
+            m_pCoreServices->getSettings()->getValue<bool>(kDarkDialogsConfigKey, true));
 
     createMenuBar();
     m_pMenuBar->hide();
