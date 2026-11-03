@@ -1463,7 +1463,7 @@ bool MixxxMainWindow::nativeEvent(
 #endif
 
 bool MixxxMainWindow::handleWindowEdge(QObject* pObj, QEvent* pEvent) {
-    if (pEvent->type() == QEvent::Leave && pObj == windowHandle()) {
+    if (pEvent->type() == QEvent::Leave && pObj == windowHandle() && m_pMenuBar) {
         m_pMenuBar->updateWindowControls(); // e.g. left over a native waveform window
         if (m_edgeCursor) {
             QApplication::restoreOverrideCursor();
@@ -1559,7 +1559,7 @@ bool MixxxMainWindow::eventFilter(QObject* obj, QEvent* event) {
             return true;
         }
     } else if (event->type() == QEvent::WindowStateChange) {
-        if (m_frameless && obj == this) {
+        if (m_frameless && obj == this && m_pMenuBar) {
             m_pMenuBar->updateWindowControls();
         }
 #ifndef __APPLE__
