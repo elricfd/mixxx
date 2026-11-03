@@ -1463,6 +1463,14 @@ bool MixxxMainWindow::nativeEvent(
 #endif
 
 bool MixxxMainWindow::handleWindowEdge(QObject* pObj, QEvent* pEvent) {
+    if (pEvent->type() == QEvent::Leave && pObj == windowHandle()) {
+        m_pMenuBar->updateWindowControls(); // e.g. left over a native waveform window
+        if (m_edgeCursor) {
+            QApplication::restoreOverrideCursor();
+            m_edgeCursor = false;
+        }
+        return false;
+    }
     const bool press = pEvent->type() == QEvent::MouseButtonPress;
     if ((!press && pEvent->type() != QEvent::MouseMove) || pObj != windowHandle()) {
         return false;
@@ -1471,11 +1479,12 @@ bool MixxxMainWindow::handleWindowEdge(QObject* pObj, QEvent* pEvent) {
     const auto* pMouse = static_cast<QMouseEvent*>(pEvent);
     const QPoint pos = pMouse->position().toPoint();
     constexpr int kBorder = 5;
+    constexpr int kTopBorder = 2; // window buttons sit at the top
     Qt::Edges edges;
     if (!isMaximized() && !isFullScreen()) {
         edges.setFlag(Qt::LeftEdge, pos.x() < kBorder);
         edges.setFlag(Qt::RightEdge, pos.x() >= width() - kBorder);
-        edges.setFlag(Qt::TopEdge, pos.y() < kBorder);
+        edges.setFlag(Qt::TopEdge, pos.y() < kTopBorder);
         edges.setFlag(Qt::BottomEdge, pos.y() >= height() - kBorder);
     }
     if (!edges) {

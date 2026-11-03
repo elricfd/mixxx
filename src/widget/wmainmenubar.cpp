@@ -3,6 +3,7 @@
 #ifndef __APPLE__
 #include <QApplication>
 #endif
+#include <QCursor>
 #include <QHBoxLayout>
 #include <QLabel>
 #include <QMouseEvent>
@@ -1063,8 +1064,19 @@ void WMainMenuBar::setSkinStyleSheet(const QString& style) {
 }
 
 void WMainMenuBar::updateWindowControls() {
-    if (m_pMaximizeButton) {
-        m_pMaximizeButton->setText(QChar(window()->isMaximized() ? 0xE923 : 0xE922));
+    if (!m_pMaximizeButton) {
+        return;
+    }
+    m_pMaximizeButton->setText(QChar(window()->isMaximized() ? 0xE923 : 0xE922));
+    // buttons move away from the cursor, no leave event follows: stale hover
+    const QPoint cursor = QCursor::pos();
+    for (auto* pButton : m_pMaximizeButton->parentWidget()->findChildren<QToolButton*>()) {
+        const bool under = pButton->isVisible() &&
+                pButton->rect().contains(pButton->mapFromGlobal(cursor));
+        if (pButton->testAttribute(Qt::WA_UnderMouse) != under) {
+            pButton->setAttribute(Qt::WA_UnderMouse, under);
+            pButton->update();
+        }
     }
 }
 
