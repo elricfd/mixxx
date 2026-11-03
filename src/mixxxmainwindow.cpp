@@ -1480,6 +1480,9 @@ bool MixxxMainWindow::handleWindowEdge(QObject* pObj, QEvent* pEvent) {
     if ((!press && pEvent->type() != QEvent::MouseMove) || pObj != windowHandle()) {
         return false;
     }
+    if (!press && m_pMenuBar) {
+        m_pMenuBar->updateWindowControls();
+    }
     // window-level events see every move, widgets only with mouse tracking
     const auto* pMouse = static_cast<QMouseEvent*>(pEvent);
     const QPoint pos = pMouse->position().toPoint();

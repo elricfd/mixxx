@@ -7,6 +7,7 @@
 #include <QHBoxLayout>
 #include <QLabel>
 #include <QMouseEvent>
+#include <QTimer>
 #include <QToolButton>
 #include <QUrl>
 #include <QWindow>
@@ -1030,6 +1031,10 @@ void WMainMenuBar::addWindowControls() {
         pButton->setFocusPolicy(Qt::NoFocus);
         pButton->setFixedSize(46, 32); // windows 11 caption button
         connect(pButton, &QToolButton::clicked, this, onClick);
+        // state changes and animations settle after the click
+        connect(pButton, &QToolButton::clicked, this, [this] {
+            QTimer::singleShot(300, this, &WMainMenuBar::updateWindowControls);
+        });
         pLayout->addWidget(pButton);
         return pButton;
     };
@@ -1044,8 +1049,8 @@ void WMainMenuBar::addWindowControls() {
     });
     pButtons->setStyleSheet(QStringLiteral(
             "QToolButton { border: none; background: transparent; color: #fff; }"
-            "QToolButton:hover { background: #262626; }"
-            "QToolButton#WindowClose:hover { background: #c42b1c; }"));
+            "QToolButton[hovered=true] { background: #262626; }"
+            "QToolButton#WindowClose[hovered=true] { background: #c42b1c; }"));
     setCornerWidget(pButtons, Qt::TopRightCorner);
 
     auto* pLogo = new QLabel(this);
@@ -1068,14 +1073,20 @@ void WMainMenuBar::updateWindowControls() {
         return;
     }
     m_pMaximizeButton->setText(QChar(window()->isMaximized() ? 0xE923 : 0xE922));
-    // buttons move away from the cursor, no leave event follows: stale hover
+    // hover from the cursor, qt enter/leave go stale when the buttons move,
+    // the window minimizes or a system move/resize grabs the mouse
+    QWidget* pButtons = m_pMaximizeButton->parentWidget();
     const QPoint cursor = QCursor::pos();
-    for (auto* pButton : m_pMaximizeButton->parentWidget()->findChildren<QToolButton*>()) {
-        const bool under = pButton->isVisible() &&
-                pButton->rect().contains(pButton->mapFromGlobal(cursor));
-        if (pButton->testAttribute(Qt::WA_UnderMouse) != under) {
-            pButton->setAttribute(Qt::WA_UnderMouse, under);
-            pButton->update();
+    const QWidget* pUnder =
+            pButtons->rect().contains(pButtons->mapFromGlobal(cursor))
+            ? QApplication::widgetAt(cursor) // also false under other windows
+            : nullptr;
+    for (auto* pButton : pButtons->findChildren<QToolButton*>()) {
+        const bool hovered = pButton == pUnder;
+        if (pButton->property("hovered").toBool() != hovered) {
+            pButton->setProperty("hovered", hovered);
+            pButton->style()->unpolish(pButton);
+            pButton->style()->polish(pButton);
         }
     }
 }
