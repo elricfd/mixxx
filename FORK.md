@@ -49,7 +49,7 @@ written when Preferences → Library → "Synchronize library track metadata to 
 
 ## Known test failures
 
-1311 of 1318 tests pass. The 7 failures are all in code this fork does not touch: 4 controller
-script timer tests that are timing-sensitive on this machine, 2 QML tests, and
-`TrackMetadataExportTest.keepWithespaceKey`. The last one fails only after
-`ControllerScriptEngineLegacyTest` runs in the same process, and passes on its own.
+1317 of 1325 tests pass. The 8 failures are all in code this fork does not touch: 4 controller
+script timer tests that are timing-sensitive on this machine, 3 QML tests, and
+`TrackMetadataExportTest.keepWithespaceKey`. The QML startup smoke tests (LateNightQML, NewUi)
+and `keepWithespaceKey` fail only after other tests run in the same process, and pass on their own.
