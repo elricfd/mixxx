@@ -1,12 +1,11 @@
 #include "widget/wmainmenubar.h"
 
-#ifndef __APPLE__
 #include <QApplication>
-#endif
 #include <QCursor>
 #include <QHBoxLayout>
 #include <QLabel>
 #include <QMouseEvent>
+#include <QStyle>
 #include <QTimer>
 #include <QToolButton>
 #include <QUrl>
