@@ -744,24 +744,24 @@ void Track::setComposer(const QString& s) {
 }
 
 QString Track::getEnergy() const {
-    const auto locked = lockMutex(&m_qMutex);
+    const auto locked = QMutexLocker(&m_qMutex);
     return m_record.getMetadata().getTrackInfo().getEnergy();
 }
 
 void Track::setEnergy(const QString& s) {
-    auto locked = lockMutex(&m_qMutex);
+    auto locked = QMutexLocker(&m_qMutex);
     if (compareAndSet(m_record.refMetadata().refTrackInfo().ptrEnergy(), s.trimmed())) {
         markDirtyAndUnlock(&locked);
     }
 }
 
 QString Track::getTempoMap() const {
-    const auto locked = lockMutex(&m_qMutex);
+    const auto locked = QMutexLocker(&m_qMutex);
     return m_record.getMetadata().getTrackInfo().getTempoMap();
 }
 
 void Track::setTempoMap(const QString& s) {
-    auto locked = lockMutex(&m_qMutex);
+    auto locked = QMutexLocker(&m_qMutex);
     if (compareAndSet(m_record.refMetadata().refTrackInfo().ptrTempoMap(), s.trimmed())) {
         markDirtyAndUnlock(&locked);
     }
