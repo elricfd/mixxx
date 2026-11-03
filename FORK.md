@@ -13,6 +13,8 @@ reference throughout is Mixed In Key 11, and the evaluation scripts are in `../m
 | Key | OpenKeyScan 3 (KeyNet CNN, ONNX); falls back to KeyFinder, then Queen Mary | Queen Mary | exact match with MIK on 298 tracks: 60.1% vs 36% (KeyFinder 43.6%) |
 | Energy | New 1–10 rating (7 audio features, 150 boosted trees fitted to MIK) | none | vs MIK on 2218 tracks (5-fold CV): 53.5% exact, 92.9% within ±1 |
 | Stems | Track menu → Analyze → Separate Stems writes an NI `.stem.mp4` (drums, bass, other, vocals) and adds it to the library | playback only | vocals 14.6 dB SDR on a MUSDB18-HQ excerpt |
+| Hot cues | On tracks with no hot cues, up to 8 are set at section changes on the beat grid (loudness and bass, 16 beats either side, at least 8 bars apart), labelled Start / Drop / Break / Phrase. Off with `AutoHotcues=0` under `[Library]` in `mixxx.cfg` | none | unit tested on synthetic levels; not yet scored against real cues |
+| Display | LateNight "OLED" colour scheme (Preferences → Interface): true black backgrounds, white text, and neutral white icons, blue instead of orange for active buttons, and black Preferences/dialogs with dark title bars. `style_oled.qss` and the `oled/` icon set are generated from PaleMoon by `tools/oled_scheme.py`. Text uses full font hinting, so it stays sharp at fractional scaling (e.g. 150 %) | grey backgrounds, ivory text, light dialogs, soft text at 150 % | not tested visually by the author |
 
 The library gets an Energy column (editable, sorted as a number) and a Tempo Map column (hidden by
 default); the database moves to schema 41.
