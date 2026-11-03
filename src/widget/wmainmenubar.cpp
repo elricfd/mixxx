@@ -1040,17 +1040,16 @@ void WMainMenuBar::addWindowControls() {
     addButton(QStringLiteral("WindowMinimize"), 0xE921, [this] {
         window()->showMinimized();
     });
+    m_hoverCheck.setInterval(100);
+    connect(&m_hoverCheck, &QTimer::timeout, this, &WMainMenuBar::updateWindowControls);
     m_pMaximizeButton = addButton(QStringLiteral("WindowMaximize"), 0xE922, [this] {
         window()->isMaximized() ? window()->showNormal() : window()->showMaximized();
     });
     addButton(QStringLiteral("WindowClose"), 0xE8BB, [this] {
         window()->close();
     });
-    pButtons->setStyleSheet(QStringLiteral(
-            "QToolButton { border: none; background: transparent; color: #fff; }"
-            "QToolButton[hovered=true] { background: #262626; }"
-            "QToolButton#WindowClose[hovered=true] { background: #c42b1c; }"));
     setCornerWidget(pButtons, Qt::TopRightCorner);
+    styleWindowControls();
 
     auto* pLogo = new QLabel(this);
     pLogo->setPixmap(window()->windowIcon().pixmap(QSize(16, 16), devicePixelRatioF()));
@@ -1065,6 +1064,25 @@ void WMainMenuBar::setSkinStyleSheet(const QString& style) {
     setStyleSheet(m_pMaximizeButton
                     ? style + QStringLiteral("#MainMenu::item { padding: 6px 10px; }")
                     : style);
+    styleWindowControls();
+}
+
+void WMainMenuBar::styleWindowControls() {
+    if (!m_pMaximizeButton) {
+        return;
+    }
+    // glyphs in the skin's menu text color, light and dark bars alike
+    ensurePolished();
+    const QColor text = palette().color(foregroundRole());
+    m_pMaximizeButton->parentWidget()->setStyleSheet(
+            QStringLiteral("QToolButton { border: none; background: transparent; color: %1; }"
+                           "QToolButton[hovered=true] { background: rgba(%2, %3, %4, 40); }"
+                           "QToolButton#WindowClose[hovered=true] { "
+                           "background: #c42b1c; color: #fff; }")
+                    .arg(text.name())
+                    .arg(text.red())
+                    .arg(text.green())
+                    .arg(text.blue()));
 }
 
 void WMainMenuBar::updateWindowControls() {
@@ -1080,12 +1098,19 @@ void WMainMenuBar::updateWindowControls() {
             pButtons->rect().contains(pButtons->mapFromGlobal(cursor))
             ? QApplication::widgetAt(cursor) // also false under other windows
             : nullptr;
+    // background windows may get no leave event: recheck while hovered
+    if (pUnder && pUnder->parentWidget() == pButtons) {
+        m_hoverCheck.start();
+    } else {
+        m_hoverCheck.stop();
+    }
     for (auto* pButton : pButtons->findChildren<QToolButton*>()) {
         const bool hovered = pButton == pUnder;
         if (pButton->property("hovered").toBool() != hovered) {
             pButton->setProperty("hovered", hovered);
             pButton->style()->unpolish(pButton);
             pButton->style()->polish(pButton);
+            pButton->update(); // polish alone keeps the old paint, e.g. on leave
         }
     }
 }

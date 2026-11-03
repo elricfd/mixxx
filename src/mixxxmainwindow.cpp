@@ -1468,7 +1468,9 @@ bool MixxxMainWindow::nativeEvent(
 #endif
 
 bool MixxxMainWindow::handleWindowEdge(QObject* pObj, QEvent* pEvent) {
-    if (pEvent->type() == QEvent::Leave && pObj == windowHandle() && m_pMenuBar) {
+    if (((pEvent->type() == QEvent::Leave && pObj == windowHandle()) ||
+                (pEvent->type() == QEvent::WindowDeactivate && pObj == this)) &&
+            m_pMenuBar) {
         m_pMenuBar->updateWindowControls(); // e.g. left over a native waveform window
         if (m_edgeCursor) {
             QApplication::restoreOverrideCursor();

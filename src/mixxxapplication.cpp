@@ -219,8 +219,9 @@ void MixxxApplication::setDarkDialogs(bool dark) {
     QApplication::setStyle(new DarkDialogStyle(QStringLiteral("Fusion")));
     QPalette palette(QColor(0x141414)); // button, other shades derive
     palette.setColor(QPalette::Window, Qt::black);
-    palette.setColor(QPalette::Base, Qt::black);
-    palette.setColor(QPalette::AlternateBase, QColor(0x0d0d0d));
+    // fields, checkbox and radio indicators: fusion outlines vanish on black
+    palette.setColor(QPalette::Base, QColor(0x1c1c1c));
+    palette.setColor(QPalette::AlternateBase, QColor(0x232323));
     palette.setColor(QPalette::ToolTipBase, Qt::black);
     for (const auto role : {QPalette::WindowText,
                  QPalette::Text,
