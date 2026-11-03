@@ -29,10 +29,12 @@ class AnalyzerBeats : public Analyzer {
 
   private:
     bool shouldAnalyze(TrackPointer pTrack) const;
+    std::unique_ptr<mixxx::AnalyzerBeatsPlugin> makePlugin(const QString& pluginId) const;
     static QHash<QString, QString> getExtraVersionInfo(
             const QString& pluginId, bool bPreferencesFastAnalysis);
 
     BeatDetectionSettings m_bpmSettings;
+    const QString m_resourcePath;
     std::unique_ptr<mixxx::AnalyzerBeatsPlugin> m_pPlugin;
     const bool m_enforceBpmDetection;
     QString m_pluginId;

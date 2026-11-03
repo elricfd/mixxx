@@ -593,4 +593,13 @@ reapplying those migrations.
       ALTER TABLE library ADD COLUMN tuning_frequency_hz FLOAT DEFAULT 0.0;
     </sql>
   </revision>
+  <revision version="41" min_compatible="3">
+    <description>
+      Add energy (1..10, text as in the EnergyLevel tag) and tempo_map (steady-tempo sections) columns.
+    </description>
+    <sql>
+      ALTER TABLE library ADD COLUMN energy TEXT DEFAULT '';
+      ALTER TABLE library ADD COLUMN tempo_map TEXT DEFAULT '';
+    </sql>
+  </revision>
 </schema>

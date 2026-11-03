@@ -11,6 +11,8 @@ class DetectionFunction;
 
 namespace mixxx {
 
+class BassOnsetFunction;
+
 class AnalyzerQueenMaryBeats : public AnalyzerBeatsPlugin {
   public:
     static AnalyzerPluginInfo pluginInfo() {
@@ -45,10 +47,13 @@ class AnalyzerQueenMaryBeats : public AnalyzerBeatsPlugin {
   private:
     std::unique_ptr<DetectionFunction> m_pDetectionFunction;
     DownmixAndOverlapHelper m_helper;
+    std::unique_ptr<BassOnsetFunction> m_pBassOnsetFunction;
+    DownmixAndOverlapHelper m_bassHelper;
     mixxx::audio::SampleRate m_sampleRate;
     int m_windowSize;
     int m_stepSizeFrames;
     std::vector<double> m_detectionResults;
+    std::vector<double> m_bassResults;
     QVector<mixxx::audio::FramePos> m_resultBeats;
 };
 

@@ -61,6 +61,12 @@ constexpr ColumnProperties kColumnPropertiesByEnum[] = {
         DI(ColumnCache::COLUMN_LIBRARYTABLE_COMPOSER){&LIBRARYTABLE_COMPOSER,
                 QT_TRANSLATE_NOOP("BaseTrackTableModel", "Composer"),
                 kDefaultColumnWidth * 4},
+        DI(ColumnCache::COLUMN_LIBRARYTABLE_ENERGY){&LIBRARYTABLE_ENERGY,
+                QT_TRANSLATE_NOOP("BaseTrackTableModel", "Energy"),
+                kDefaultColumnWidth},
+        DI(ColumnCache::COLUMN_LIBRARYTABLE_TEMPO_MAP){&LIBRARYTABLE_TEMPO_MAP,
+                QT_TRANSLATE_NOOP("BaseTrackTableModel", "Tempo Map"),
+                kDefaultColumnWidth * 4},
         DI(ColumnCache::COLUMN_LIBRARYTABLE_GROUPING){&LIBRARYTABLE_GROUPING,
                 QT_TRANSLATE_NOOP("BaseTrackTableModel", "Grouping"),
                 kDefaultColumnWidth * 4},
@@ -238,6 +244,8 @@ void ColumnCache::setColumns(QStringList columns) {
     insertColumnSortByEnum(COLUMN_LIBRARYTABLE_GENRE, kSortNoCaseLex);
     insertColumnSortByEnum(COLUMN_LIBRARYTABLE_COMPOSER, kSortNoCaseLex);
     insertColumnSortByEnum(COLUMN_LIBRARYTABLE_GROUPING, kSortNoCaseLex);
+    insertColumnSortByEnum(COLUMN_LIBRARYTABLE_ENERGY, kSortInt);
+    insertColumnSortByEnum(COLUMN_LIBRARYTABLE_TEMPO_MAP, kSortNoCase);
     insertColumnSortByEnum(COLUMN_LIBRARYTABLE_TRACKNUMBER, kSortInt);
     insertColumnSortByEnum(COLUMN_LIBRARYTABLE_FILETYPE, kSortNoCase);
     insertColumnSortByEnum(COLUMN_LIBRARYTABLE_COMMENT, kSortNoCaseLex);

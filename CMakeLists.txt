@@ -1196,6 +1196,7 @@ add_library(
   src/analyzer/plugins/analyzerqueenmarybeats.cpp
   src/analyzer/plugins/analyzerqueenmarykey.cpp
   src/analyzer/plugins/analyzersoundtouchbeats.cpp
+  src/analyzer/plugins/bassonsetfunction.cpp
   src/analyzer/plugins/buffering_utils.cpp
   src/analyzer/trackanalysisscheduler.cpp
   src/audio/frame.cpp
@@ -2612,6 +2613,12 @@ install(
   DESTINATION "${MIXXX_INSTALL_DATADIR}"
 )
 
+# Stem separation helper run by the track menu's "Separate Stems"
+install(
+  DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/res/stems"
+  DESTINATION "${MIXXX_INSTALL_DATADIR}"
+)
+
 # Licenses
 install(
   FILES
@@ -2873,6 +2880,7 @@ if(BUILD_TESTING)
     src-mixxx-test
     src/test/analyserwaveformtest.cpp
     src/test/analyzerhotcuestest.cpp
+    src/test/analyzerqueenmarybeats_test.cpp
     src/test/analyzersilence_test.cpp
     src/test/audiotaperpot_test.cpp
     src/test/autodjprocessor_test.cpp
@@ -2880,6 +2888,11 @@ if(BUILD_TESTING)
     src/test/beatmaptest.cpp
     src/test/beatstest.cpp
     src/test/beatstranslatetest.cpp
+    src/test/beatutilstest.cpp
+    src/test/analyzerbeatthistest.cpp
+    src/test/analyzerkeyevaltest.cpp
+    src/test/analyzeropenkeyscantest.cpp
+    src/test/analyzerenergytest.cpp
     src/test/borrowabletest.cpp
     src/test/bpmtest.cpp
     src/test/bpmcontrol_test.cpp
@@ -2976,6 +2989,7 @@ if(BUILD_TESTING)
     src/test/synctrackmetadatatest.cpp
     src/test/tableview_test.cpp
     src/test/taglibtest.cpp
+    src/test/tempotrackv2_test.cpp
     src/test/trackdao_test.cpp
     src/test/trackexport_test.cpp
     src/test/trackmetadata_test.cpp
@@ -3609,6 +3623,87 @@ if(KEYFINDER)
 
   target_sources(mixxx-lib PRIVATE src/analyzer/plugins/analyzerkeyfinder.cpp)
   target_compile_definitions(mixxx-lib PUBLIC __KEYFINDER__)
+endif()
+
+# Beat This! neural beat tracker, run with ONNX Runtime
+# The model is not part of the repository: export it with
+# mik-tempo-research/export_onnx.py into res/models/beatthis_final0.onnx.
+option(BEATTHIS "Beat This! neural beat tracker (needs ONNX Runtime)" ON)
+if(BEATTHIS)
+  find_package(onnxruntime CONFIG QUIET)
+  if(NOT TARGET onnxruntime::onnxruntime)
+    set(ONNXRUNTIME_ROOT "" CACHE PATH "Unpacked ONNX Runtime release")
+    find_path(
+      ONNXRUNTIME_INCLUDE_DIR
+      onnxruntime_cxx_api.h
+      HINTS "${ONNXRUNTIME_ROOT}/include"
+      PATH_SUFFIXES onnxruntime onnxruntime/core/session
+    )
+    find_library(
+      ONNXRUNTIME_LIBRARY
+      onnxruntime
+      HINTS "${ONNXRUNTIME_ROOT}/lib"
+    )
+    if(ONNXRUNTIME_INCLUDE_DIR AND ONNXRUNTIME_LIBRARY)
+      add_library(onnxruntime::onnxruntime UNKNOWN IMPORTED)
+      set_target_properties(
+        onnxruntime::onnxruntime
+        PROPERTIES
+          IMPORTED_LOCATION "${ONNXRUNTIME_LIBRARY}"
+          INTERFACE_INCLUDE_DIRECTORIES "${ONNXRUNTIME_INCLUDE_DIR}"
+      )
+    endif()
+  endif()
+  find_package(SampleRate CONFIG QUIET)
+  if(TARGET onnxruntime::onnxruntime AND TARGET SampleRate::samplerate)
+    # OpenKeyScan neural key detector shares ONNX Runtime; model:
+    # mik-tempo-research/export_openkeyscan_onnx.py into res/models/openkeyscan3.onnx.
+    target_sources(
+      mixxx-lib
+      PRIVATE
+        src/analyzer/plugins/analyzerbeatthis.cpp
+        src/analyzer/plugins/analyzeropenkeyscan.cpp
+        src/analyzer/plugins/onnxutil.cpp
+    )
+    target_link_libraries(
+      mixxx-lib
+      PRIVATE onnxruntime::onnxruntime SampleRate::samplerate
+    )
+    target_compile_definitions(mixxx-lib PUBLIC __BEATTHIS__ __OPENKEYSCAN__)
+    if(WIN32 AND ONNXRUNTIME_ROOT)
+      # The prebuilt ONNX Runtime is not managed by vcpkg's applocal copy.
+      file(GLOB ONNXRUNTIME_DLLS "${ONNXRUNTIME_ROOT}/lib/*.dll")
+      file(COPY ${ONNXRUNTIME_DLLS} DESTINATION "${CMAKE_CURRENT_BINARY_DIR}")
+      install(FILES ${ONNXRUNTIME_DLLS} DESTINATION "${MIXXX_INSTALL_BINDIR}")
+    endif()
+    if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/res/models/beatthis_final0.onnx")
+      install(
+        FILES "${CMAKE_CURRENT_SOURCE_DIR}/res/models/beatthis_final0.onnx"
+        DESTINATION "${MIXXX_INSTALL_DATADIR}/models"
+      )
+    endif()
+    if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/res/models/openkeyscan3.onnx")
+      install(
+        FILES "${CMAKE_CURRENT_SOURCE_DIR}/res/models/openkeyscan3.onnx"
+        DESTINATION "${MIXXX_INSTALL_DATADIR}/models"
+      )
+    endif()
+  else()
+    message(
+      WARNING
+      "Beat This! disabled: ONNX Runtime (set ONNXRUNTIME_ROOT) or libsamplerate not found"
+    )
+  endif()
+endif()
+
+# Energy level 1..10 (trees fitted to Mixed In Key, see mik-tempo-research/energy_export.py)
+find_package(SampleRate CONFIG QUIET)
+if(TARGET SampleRate::samplerate)
+  target_sources(mixxx-lib PRIVATE src/analyzer/analyzerenergy.cpp)
+  target_link_libraries(mixxx-lib PRIVATE SampleRate::samplerate)
+  target_compile_definitions(mixxx-lib PUBLIC __ENERGY__)
+else()
+  message(WARNING "Energy analysis disabled: libsamplerate not found")
 endif()
 
 # FLAC
@@ -4787,6 +4882,9 @@ target_include_directories(
   PUBLIC lib/qm-dsp lib/qm-dsp/include
 )
 target_link_libraries(mixxx-lib PRIVATE QueenMaryDsp)
+if(BUILD_TESTING)
+  target_link_libraries(mixxx-test PRIVATE QueenMaryDsp)
+endif()
 
 # ReplayGain
 add_library(ReplayGain STATIC EXCLUDE_FROM_ALL lib/replaygain/replaygain.cpp)

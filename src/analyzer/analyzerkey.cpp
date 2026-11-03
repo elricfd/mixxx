@@ -8,6 +8,9 @@
 #include "analyzer/plugins/analyzerkeyfinder.h"
 #endif
 #include "analyzer/plugins/analyzerqueenmarykey.h"
+#ifdef __OPENKEYSCAN__
+#include "analyzer/plugins/analyzeropenkeyscan.h"
+#endif
 #include "proto/keys.pb.h"
 #include "track/keyfactory.h"
 #include "track/track.h"
@@ -19,7 +22,10 @@ constexpr int excludeFirstChannelMask = 0x1;
 // static
 QList<mixxx::AnalyzerPluginInfo> AnalyzerKey::availablePlugins() {
     QList<mixxx::AnalyzerPluginInfo> analyzers;
-    // First one below is the default
+    // The default is chosen in defaultPlugin()
+#ifdef __OPENKEYSCAN__
+    analyzers.push_back(mixxx::AnalyzerOpenKeyScan::pluginInfo());
+#endif
     analyzers.push_back(mixxx::AnalyzerQueenMaryKey::pluginInfo());
 #if defined __KEYFINDER__
     analyzers.push_back(mixxx::AnalyzerKeyFinder::pluginInfo());
@@ -31,11 +37,44 @@ QList<mixxx::AnalyzerPluginInfo> AnalyzerKey::availablePlugins() {
 mixxx::AnalyzerPluginInfo AnalyzerKey::defaultPlugin() {
     const auto plugins = availablePlugins();
     DEBUG_ASSERT(!plugins.isEmpty());
+#if defined __OPENKEYSCAN__
+    // Agreement with Mixed In Key on 298 library tracks (mik-tempo-research/key_models.py):
+    // OpenKeyScan 59% exact, KeyFinder 44%, Queen Mary 36%. Without the model file
+    // initialize() falls back to KeyFinder.
+    return mixxx::AnalyzerOpenKeyScan::pluginInfo();
+#elif defined __KEYFINDER__
+    // KeyFinder agrees with Mixed In Key more often than Queen Mary
+    // (44% vs 36% exact on 298 library tracks, mik-tempo-research/key_eval.py).
+    return mixxx::AnalyzerKeyFinder::pluginInfo();
+#else
     return plugins.at(0);
+#endif
 }
 
-AnalyzerKey::AnalyzerKey(const KeyDetectionSettings& keySettings)
-        : m_keySettings(keySettings),
+std::unique_ptr<mixxx::AnalyzerKeyPlugin> AnalyzerKey::makePlugin(
+        const QString& pluginId) const {
+#ifdef __OPENKEYSCAN__
+    if (pluginId == mixxx::AnalyzerOpenKeyScan::pluginInfo().id()) {
+        return std::make_unique<mixxx::AnalyzerOpenKeyScan>(
+                mixxx::AnalyzerOpenKeyScan::modelPath(m_resourcePath));
+    }
+#endif
+#if defined __KEYFINDER__
+    if (pluginId == mixxx::AnalyzerKeyFinder::pluginInfo().id()) {
+        return std::make_unique<mixxx::AnalyzerKeyFinder>();
+    }
+#endif
+    if (pluginId == mixxx::AnalyzerQueenMaryKey::pluginInfo().id()) {
+        return std::make_unique<mixxx::AnalyzerQueenMaryKey>();
+    }
+    // We have already verified that the plugin id is valid
+    DEBUG_ASSERT(false);
+    return nullptr;
+}
+
+AnalyzerKey::AnalyzerKey(UserSettingsPointer pConfig)
+        : m_keySettings(pConfig),
+          m_resourcePath(pConfig->getResourcePath()),
           m_sampleRate(0),
           m_totalFrames(0),
           m_maxFramesToProcess(0),
@@ -96,28 +135,27 @@ bool AnalyzerKey::initialize(const AnalyzerTrack& track,
 
     DEBUG_ASSERT(!m_pPlugin);
     if (bShouldAnalyze) {
-        if (m_pluginId == mixxx::AnalyzerQueenMaryKey::pluginInfo().id()) {
-            m_pPlugin = std::make_unique<mixxx::AnalyzerQueenMaryKey>();
+        m_pPlugin = makePlugin(m_pluginId);
+        bShouldAnalyze = m_pPlugin && m_pPlugin->initialize(mixxx::audio::SampleRate(m_sampleRate));
 #if defined __KEYFINDER__
-        } else if (m_pluginId == mixxx::AnalyzerKeyFinder::pluginInfo().id()) {
-            m_pPlugin = std::make_unique<mixxx::AnalyzerKeyFinder>();
+        const QString fallbackId = mixxx::AnalyzerKeyFinder::pluginInfo().id();
+#else
+        const QString fallbackId = mixxx::AnalyzerQueenMaryKey::pluginInfo().id();
 #endif
-        } else {
-            // This must not happen, because we have already verified above
-            // that the PlugInId is valid
-            DEBUG_ASSERT(false);
+        if (!bShouldAnalyze && m_pluginId != fallbackId) {
+            // e.g. the OpenKeyScan model file is missing
+            qWarning() << "Key plugin" << m_pluginId << "is unavailable, falling back to"
+                       << fallbackId;
+            m_pluginId = fallbackId;
+            m_pPlugin = makePlugin(m_pluginId);
+            bShouldAnalyze = m_pPlugin &&
+                    m_pPlugin->initialize(mixxx::audio::SampleRate(m_sampleRate));
         }
-
-        if (m_pPlugin) {
-            if (m_pPlugin->initialize(mixxx::audio::SampleRate(m_sampleRate))) {
-                qDebug() << "Key calculation started with plugin" << m_pluginId;
-            } else {
-                qDebug() << "Key calculation will not start.";
-                m_pPlugin.reset();
-                bShouldAnalyze = false;
-            }
+        if (bShouldAnalyze) {
+            qDebug() << "Key calculation started with plugin" << m_pluginId;
         } else {
-            bShouldAnalyze = false;
+            qDebug() << "Key calculation will not start.";
+            m_pPlugin.reset();
         }
     }
     return bShouldAnalyze;

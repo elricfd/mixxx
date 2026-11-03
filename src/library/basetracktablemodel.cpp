@@ -362,6 +362,7 @@ bool BaseTrackTableModel::isColumnHiddenByDefault(
             column == fieldIndex(ColumnCache::COLUMN_LIBRARYTABLE_COMPOSER) ||
             column == fieldIndex(ColumnCache::COLUMN_LIBRARYTABLE_FILETYPE) ||
             column == fieldIndex(ColumnCache::COLUMN_LIBRARYTABLE_GROUPING) ||
+            column == fieldIndex(ColumnCache::COLUMN_LIBRARYTABLE_TEMPO_MAP) ||
             column == fieldIndex(ColumnCache::COLUMN_TRACKLOCATIONSTABLE_LOCATION) ||
             column == fieldIndex(ColumnCache::COLUMN_LIBRARYTABLE_PLAYED) ||
             column == fieldIndex(ColumnCache::COLUMN_LIBRARYTABLE_REPLAYGAIN) ||

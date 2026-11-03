@@ -20,6 +20,20 @@ class BeatUtils {
             const QVector<mixxx::audio::FramePos>& coarseBeats,
             mixxx::audio::SampleRate sampleRate);
 
+    /// Fraction [0, 1] of analyzedFrames covered by constant regions of at
+    /// least kMinRegionBeatCount beats. std::nullopt if analyzedFrames <= 0.
+    static std::optional<double> steadyCoverage(
+            const QVector<ConstRegion>& constantRegions,
+            mixxx::audio::FrameDiff_t analyzedFrames);
+
+    /// Steady-tempo sections as text, e.g. "0:00 -, 0:35 120.00, 2:10 140.00":
+    /// constant regions of at least kMinRegionBeatCount beats, neighbours within
+    /// 2% merged, gaps of 10 s or more marked "-". Empty unless there are at
+    /// least two different tempos (the BPM covers a single one).
+    static QString tempoMap(
+            const QVector<ConstRegion>& constantRegions,
+            mixxx::audio::SampleRate sampleRate);
+
     static mixxx::Bpm calculateAverageBpm(int numberOfBeats,
             mixxx::audio::SampleRate sampleRate,
             mixxx::audio::FramePos lowerFrame,

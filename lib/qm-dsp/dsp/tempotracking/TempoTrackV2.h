@@ -50,6 +50,14 @@ public:
                              std::vector<int> &beatPeriod,
                              double inputtempo, bool constraintempo);
 
+    // Mixxx: beat periods from two detection functions with the same
+    // increment, e.g. broadband and bass band. The second one is used to
+    // correct beat periods that are 2/3 or 4/3 of the true one.
+    // Default tempo weighting (120 bpm Rayleigh).
+    void calculateBeatPeriod(const std::vector<double> &df,
+                             const std::vector<double> &df2,
+                             std::vector<int> &beatPeriod);
+
     // Returned beat positions are given in df increment units
     void calculateBeats(const std::vector<double> &df,
                         const std::vector<int> &beatPeriod,
@@ -65,6 +73,13 @@ public:
                         std::vector<double> &beats,
                         double alpha, double tightness);
 
+    // Mixxx: beat periods as calculateBeatPeriod(df, df2, beatPeriod), then
+    // beats, doubled or halved when the broadband and bass-band evidence
+    // says the tracked beats are half or double beats.
+    void calculateBeats(const std::vector<double> &df,
+                        const std::vector<double> &df2,
+                        std::vector<double> &beats);
+
 private:
     typedef std::vector<int> i_vec_t;
     typedef std::vector<std::vector<int> > i_mat_t;
@@ -77,7 +92,12 @@ private:
     void adapt_thresh(d_vec_t &df);
     double mean_array(const d_vec_t &dfin, int start, int end);
     void filter_df(d_vec_t &df);
+    void get_wv(double inputtempo, bool constraintempo, d_vec_t &wv);
+    void get_rcfmat(const d_vec_t &df, const d_vec_t &wv, d_mat_t &rcfmat);
     void get_rcf(const d_vec_t &dfframe, const d_vec_t &wv, d_vec_t &rcf);
+    std::size_t gated_beat_period(const d_vec_t &df, const d_vec_t &df2,
+                                  i_vec_t &beatPeriod,
+                                  d_vec_t &profile, d_vec_t &profile2);
     void viterbi_decode(const d_mat_t &rcfmat, const d_vec_t &wv, i_vec_t &bp);
     double get_max_val(const d_vec_t &df);
     int get_max_ind(const d_vec_t &df);

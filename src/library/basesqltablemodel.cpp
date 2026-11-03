@@ -123,6 +123,12 @@ void BaseSqlTableModel::initSortColumnMapping() {
             TrackModel::SortColumnId::TuningFrequency)] =
             fieldIndex(ColumnCache::COLUMN_LIBRARYTABLE_TUNING_FREQUENCY);
     m_columnIndexBySortColumnId[static_cast<int>(
+            TrackModel::SortColumnId::Energy)] =
+            fieldIndex(ColumnCache::COLUMN_LIBRARYTABLE_ENERGY);
+    m_columnIndexBySortColumnId[static_cast<int>(
+            TrackModel::SortColumnId::TempoMap)] =
+            fieldIndex(ColumnCache::COLUMN_LIBRARYTABLE_TEMPO_MAP);
+    m_columnIndexBySortColumnId[static_cast<int>(
             TrackModel::SortColumnId::Preview)] =
             fieldIndex(ColumnCache::COLUMN_LIBRARYTABLE_PREVIEW);
     m_columnIndexBySortColumnId[static_cast<int>(
@@ -728,6 +734,8 @@ bool BaseSqlTableModel::setTrackValueForColumn(
         updateTrackGenre(pTrack.get(), value.toString());
     } else if (fieldIndex(ColumnCache::COLUMN_LIBRARYTABLE_COMPOSER) == column) {
         pTrack->setComposer(value.toString());
+    } else if (fieldIndex(ColumnCache::COLUMN_LIBRARYTABLE_ENERGY) == column) {
+        pTrack->setEnergy(value.toString());
     } else if (fieldIndex(ColumnCache::COLUMN_LIBRARYTABLE_GROUPING) == column) {
         pTrack->setGrouping(value.toString());
     } else if (fieldIndex(ColumnCache::COLUMN_LIBRARYTABLE_TRACKNUMBER) == column) {

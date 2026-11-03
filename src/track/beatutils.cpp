@@ -1,6 +1,8 @@
 #include "track/beatutils.h"
 
+#include <QStringList>
 #include <QtDebug>
+#include <cmath>
 
 #include "util/math.h"
 
@@ -15,6 +17,9 @@ constexpr double kMaxSecsPhaseError = 0.025;
 constexpr double kMaxSecsPhaseErrorSum = 0.1;
 constexpr int kMaxOutliersCount = 1;
 constexpr int kMinRegionBeatCount = 16;
+// Plausible range for tempo map sections
+constexpr double kMinTempoMapBpm = 40;
+constexpr double kMaxTempoMapBpm = 220;
 
 } // namespace
 
@@ -137,6 +142,93 @@ QVector<BeatUtils::ConstRegion> BeatUtils::retrieveConstRegions(
 }
 
 // static
+std::optional<double> BeatUtils::steadyCoverage(
+        const QVector<BeatUtils::ConstRegion>& constantRegions,
+        mixxx::audio::FrameDiff_t analyzedFrames) {
+    if (analyzedFrames <= 0) {
+        return std::nullopt;
+    }
+    // Regions shorter than kMinRegionBeatCount are where the detected beats
+    // are floating around, e.g. ambient passages, rubato or beatless intros.
+    // Their share of the track tells how much of it has a steady pulse.
+    mixxx::audio::FrameDiff_t steadyFrames = 0;
+    for (int i = 0; i < constantRegions.size() - 1; ++i) {
+        if (constantRegions[i].beatLength <= 0) {
+            continue;
+        }
+        const mixxx::audio::FrameDiff_t length =
+                constantRegions[i + 1].firstBeat - constantRegions[i].firstBeat;
+        const int numberOfBeats = static_cast<int>((length / constantRegions[i].beatLength) + 0.5);
+        if (numberOfBeats >= kMinRegionBeatCount) {
+            steadyFrames += length;
+        }
+    }
+    return math_min(steadyFrames / analyzedFrames, 1.0);
+}
+
+// static
+QString BeatUtils::tempoMap(
+        const QVector<BeatUtils::ConstRegion>& constantRegions,
+        mixxx::audio::SampleRate sampleRate) {
+    struct Section {
+        double start;
+        double end;
+        double bpm;
+    };
+    QVector<Section> sections;
+    for (int i = 0; i < constantRegions.size() - 1; ++i) {
+        const auto beatLength = constantRegions[i].beatLength;
+        if (beatLength <= 0) {
+            continue;
+        }
+        const auto length = constantRegions[i + 1].firstBeat - constantRegions[i].firstBeat;
+        if (static_cast<int>(length / beatLength + 0.5) < kMinRegionBeatCount) {
+            continue;
+        }
+        const Section s{constantRegions[i].firstBeat.value() / sampleRate,
+                constantRegions[i + 1].firstBeat.value() / sampleRate,
+                60.0 * sampleRate / beatLength};
+        if (s.bpm < kMinTempoMapBpm || s.bpm > kMaxTempoMapBpm) {
+            // Tracker artefacts (e.g. 340 BPM double-time flips): leave as a gap
+            continue;
+        }
+        if (!sections.isEmpty() && s.start - sections.last().end < 1.0 &&
+                std::abs(s.bpm / sections.last().bpm - 1) < 0.02) {
+            // Same tempo continues: merge, weighting the tempo by duration
+            Section& last = sections.last();
+            const double w = (last.end - last.start) / (s.end - last.start);
+            last.bpm = w * last.bpm + (1 - w) * s.bpm;
+            last.end = s.end;
+        } else {
+            sections.append(s);
+        }
+    }
+    int tempos = 0;
+    for (int i = 0; i < sections.size(); ++i) {
+        if (i == 0 || std::abs(sections[i].bpm / sections[i - 1].bpm - 1) >= 0.02) {
+            ++tempos;
+        }
+    }
+    if (tempos < 2) {
+        return {};
+    }
+    const auto time = [](double secs) {
+        const int s = static_cast<int>(secs);
+        return QStringLiteral("%1:%2").arg(s / 60).arg(s % 60, 2, 10, QChar('0'));
+    };
+    QStringList parts;
+    double end = 0;
+    for (const auto& s : std::as_const(sections)) {
+        if (s.start - end >= 10.0) {
+            parts.append(time(end) + QStringLiteral(" -"));
+        }
+        parts.append(time(s.start) + ' ' + QString::number(s.bpm, 'f', 2));
+        end = s.end;
+    }
+    return parts.join(QStringLiteral(", "));
+}
+
+// static
 mixxx::Bpm BeatUtils::makeConstBpm(
         const QVector<BeatUtils::ConstRegion>& constantRegions,
         mixxx::audio::SampleRate sampleRate,
@@ -161,18 +253,30 @@ mixxx::Bpm BeatUtils::makeConstBpm(
     // Note: This function is channel count independent. All sample based values in
     // this functions are based on frames.
 
+    // Only regions with enough beats qualify: a beatless gap (Beat This! emits no
+    // beats there) is a long region holding a single "beat", which would otherwise
+    // win and give tempos like 1.6 BPM. Fall back to 2 beats if no region has enough.
     int midRegionIndex = 0;
     mixxx::audio::FrameDiff_t longestRegionLength = 0;
     mixxx::audio::FrameDiff_t longestRegionBeatLength = 0;
-    for (int i = 0; i < constantRegions.size() - 1; ++i) {
-        mixxx::audio::FrameDiff_t length =
-                constantRegions[i + 1].firstBeat - constantRegions[i].firstBeat;
-        if (length > longestRegionLength) {
-            longestRegionLength = length;
-            longestRegionBeatLength = constantRegions[i].beatLength;
-            midRegionIndex = i;
+    for (const int minBeats : {kMinRegionBeatCount, 2}) {
+        for (int i = 0; i < constantRegions.size() - 1; ++i) {
+            const mixxx::audio::FrameDiff_t length =
+                    constantRegions[i + 1].firstBeat - constantRegions[i].firstBeat;
+            if (constantRegions[i].beatLength <= 0 ||
+                    static_cast<int>(length / constantRegions[i].beatLength + 0.5) <
+                            minBeats) {
+                continue;
+            }
+            if (length > longestRegionLength) {
+                longestRegionLength = length;
+                longestRegionBeatLength = constantRegions[i].beatLength;
+                midRegionIndex = i;
+            }
         }
-        //qDebug() << i << length << constantRegions[i].beatLength;
+        if (longestRegionLength > 0) {
+            break;
+        }
     }
 
     if (longestRegionLength == 0) {

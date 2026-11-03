@@ -380,6 +380,16 @@ void importTrackMetadataFromTag(
         pTrackMetadata->refTrackInfo().setKeyText(keyText);
     }
 
+    // ENERGYLEVEL as written by Mixed In Key
+    QString energy;
+    if (readCommentField(tag, "ENERGYLEVEL", &energy) || resetMissingTagMetadata) {
+        pTrackMetadata->refTrackInfo().setEnergy(energy);
+    }
+    QString tempoMap;
+    if (readCommentField(tag, "TEMPOMAP", &tempoMap) || resetMissingTagMetadata) {
+        pTrackMetadata->refTrackInfo().setTempoMap(tempoMap);
+    }
+
     // Only read track gain (not album gain)
     QString trackGain;
     if (readCommentField(tag, "REPLAYGAIN_TRACK_GAIN", &trackGain) || resetMissingTagMetadata) {
@@ -576,6 +586,9 @@ bool exportTrackMetadataIntoTag(
             toTString(trackMetadata.getTrackInfo().getKeyText());
     writeCommentField(pTag, "INITIALKEY", keyText); // recommended field
     updateCommentField(pTag, "KEY", keyText);       // alternative field
+
+    writeCommentField(pTag, "ENERGYLEVEL", toTString(trackMetadata.getTrackInfo().getEnergy()));
+    writeCommentField(pTag, "TEMPOMAP", toTString(trackMetadata.getTrackInfo().getTempoMap()));
 
     writeCommentField(pTag, "REPLAYGAIN_TRACK_GAIN", toTString(formatTrackGain(trackMetadata)));
     // NOTE(uklotzde, 2018-04-22): The analyzers currently doesn't

@@ -23,9 +23,14 @@ message Bpm {
 
 message BeatMap {
   repeated Beat beat = 1;
+  // Fraction [0, 1] of the analyzed audio covered by constant-tempo regions
+  // of at least 16 beats. Absent if unknown (e.g. not produced by the analyzer).
+  optional double steady_coverage = 2;
 }
 
 message BeatGrid {
   optional Bpm bpm = 1;
   optional Beat first_beat = 2;
+  // See BeatMap.steady_coverage.
+  optional double steady_coverage = 3;
 }

@@ -49,6 +49,7 @@ bool TrackInfo::compareEq(
             getBpm().compareEq(trackInfo.getBpm(), cmpBpm) &&
             (getComment() == trackInfo.getComment()) &&
             (getComposer() == trackInfo.getComposer()) &&
+            (getEnergy() == trackInfo.getEnergy()) &&
 #if defined(__EXTRA_METADATA__)
             (getConductor() == trackInfo.getConductor()) &&
             (getDiscNumber() == trackInfo.getDiscNumber()) &&
@@ -75,6 +76,7 @@ bool TrackInfo::compareEq(
 #endif // __EXTRA_METADATA__
             (getReplayGain() == trackInfo.getReplayGain()) &&
             (getSeratoTags() == trackInfo.getSeratoTags()) &&
+            (getTempoMap() == trackInfo.getTempoMap()) &&
 #if defined(__EXTRA_METADATA__)
             (getSubtitle() == trackInfo.getSubtitle()) &&
 #endif // __EXTRA_METADATA__
@@ -93,6 +95,7 @@ QDebug operator<<(QDebug dbg, const TrackInfo& arg) {
     arg.dbgBpm(dbg);
     arg.dbgComment(dbg);
     arg.dbgComposer(dbg);
+    arg.dbgEnergy(dbg);
 #if defined(__EXTRA_METADATA__)
     arg.dbgConductor(dbg);
     arg.dbgDiscNumber(dbg);
@@ -119,6 +122,7 @@ QDebug operator<<(QDebug dbg, const TrackInfo& arg) {
 #endif // __EXTRA_METADATA__
     arg.dbgReplayGain(dbg);
     arg.dbgSeratoTags(dbg);
+    arg.dbgTempoMap(dbg);
 #if defined(__EXTRA_METADATA__)
     arg.dbgSubtitle(dbg);
 #endif // __EXTRA_METADATA__

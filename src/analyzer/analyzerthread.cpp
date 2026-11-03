@@ -4,6 +4,9 @@
 
 #include "analyzer/analyzerbeats.h"
 #include "analyzer/analyzerebur128.h"
+#ifdef __ENERGY__
+#include "analyzer/analyzerenergy.h"
+#endif
 #include "analyzer/analyzergain.h"
 #include "analyzer/analyzerhotcues.h"
 #include "analyzer/analyzerkey.h"
@@ -115,6 +118,9 @@ void AnalyzerThread::doRun() {
     const bool enforceBpmDetection = (m_modeFlags & AnalyzerModeFlags::WithBeats) != 0;
     m_analyzers.push_back(AnalyzerWithState(std::make_unique<AnalyzerBeats>(m_pConfig, enforceBpmDetection)));
     m_analyzers.push_back(AnalyzerWithState(std::make_unique<AnalyzerKey>(m_pConfig)));
+#ifdef __ENERGY__
+    m_analyzers.push_back(AnalyzerWithState(std::make_unique<AnalyzerEnergy>()));
+#endif
     m_analyzers.push_back(AnalyzerWithState(std::make_unique<AnalyzerSilence>(m_pConfig)));
     // after AnalyzerBeats, needs its beats
     m_analyzers.push_back(AnalyzerWithState(std::make_unique<AnalyzerHotcues>(m_pConfig)));
